@@ -52,6 +52,9 @@ if (serveMode) {
     res.sendFile(fileURLToPath(new URL('../build-client/app.js', import.meta.url)))
   })
   app.use('/assets', express.static('public/assets'))
+  app.get('/manifest.webmanifest', (_req, res) => {
+    res.sendFile(fileURLToPath(new URL('../public/manifest.webmanifest', import.meta.url)))
+  })
   app.get('/render.css.map', async (_req, res) => {
     await renderContext.rebuild()
     res.sendFile(

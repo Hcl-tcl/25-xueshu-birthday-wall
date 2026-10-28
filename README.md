@@ -17,6 +17,12 @@ npm run dev
 
 `npm run build` 会生成可部署的静态文件到 `public/`。云端构建需设置环境变量 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`；生产发布流程会要求两项配置齐全。
 
+## 添加到手机桌面
+
+- Android：用 Chrome 打开生日墙网址，打开右上角菜单，选择“安装应用”或“添加到主屏幕”。
+- iPhone：用 Safari 打开生日墙网址，点“分享”按钮，再选择“添加到主屏幕”。
+- 从微信等内置浏览器打开时，先选择“在浏览器中打开”。桌面应用仍需联网访问共享生日簿。
+
 数据库表、权限策略和实时订阅由 [supabase/schema.sql](./supabase/schema.sql) 建立。
 
 ## 开源来源
