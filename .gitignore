@@ -1,0 +1,6 @@
+node_modules/
+build/
+build-client/
+public/index.html
+public/index.css
+public/app.js

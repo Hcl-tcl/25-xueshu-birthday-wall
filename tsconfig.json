@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "types": ["node"],
+    "module": "esnext",
+    "target": "esnext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "bundler",
+    "noUncheckedSideEffectImports": false
+  }
+}
