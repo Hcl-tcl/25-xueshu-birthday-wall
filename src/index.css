@@ -28,6 +28,41 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .topbar, main, .footer { width: min(1180px, calc(100% - 64px)); margin-right: auto; margin-left: auto; }
 .topbar { height: 78px; display: flex; align-items: center; justify-content: space-between; }
+.home-arrival { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; justify-items: center; align-content: center; gap: 15px; overflow: hidden; padding: 34px 22px 28px; color: #283a30; background: #f4efe3; }
+.arrival-welcome { display: grid; justify-items: center; gap: 8px; opacity: 0; animation: welcome-arrive 550ms 100ms ease-out forwards; }
+.arrival-welcome span { color: #6e806f; font-size: 12px; font-weight: 600; }
+.arrival-welcome strong { color: #214b3d; font-size: 31px; font-weight: 600; }
+.arrival-stage { width: min(430px, 100%); min-height: 260px; position: relative; display: grid; place-items: center; align-self: center; perspective: 800px; }
+.arrival-house { width: 268px; height: 204px; position: relative; transform: translateY(16px) scale(.94); opacity: 0; animation: house-arrive 650ms 170ms cubic-bezier(.2, .75, .25, 1) forwards; }
+.arrival-chimney { width: 38px; height: 70px; position: absolute; top: 2px; right: 43px; z-index: 0; border: 3px solid #a95848; border-bottom: 0; background: #ce7b63; }
+.arrival-roof { width: 312px; height: 117px; position: absolute; top: 0; left: -22px; z-index: 2; clip-path: polygon(50% 0, 100% 74%, 95% 83%, 5% 83%, 0 74%); background: #b96651; }
+.arrival-roof::after { content: ''; position: absolute; inset: auto 11px 18px; height: 8px; border-radius: 4px; background: #d78970; }
+.arrival-wall { position: absolute; inset: 66px 5px 0; z-index: 1; overflow: hidden; border: 3px solid #d1c3a7; background: #e6dcc6; box-shadow: inset 0 0 0 5px #f0e7d4; perspective: 700px; }
+.arrival-attic-window { width: 33px; height: 24px; position: absolute; top: 4px; left: 50%; transform: translateX(-50%); border: 3px solid #f4e8d0; background: #d5b97d; animation: window-warm 500ms 650ms ease-out both; }
+.arrival-attic-window::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #f4e8d0; }
+.arrival-window { width: 49px; height: 43px; position: absolute; bottom: 37px; z-index: 1; border: 5px solid #f3e9d5; background: #80958a; animation: window-warm 550ms 620ms ease-out both; }
+.arrival-window::before, .arrival-window::after { content: ''; position: absolute; background: #f3e9d5; }
+.arrival-window::before { top: 0; bottom: 0; left: 50%; width: 3px; }
+.arrival-window::after { top: 50%; right: 0; left: 0; height: 3px; }
+.arrival-window-left { left: 22px; }
+.arrival-window-right { right: 22px; animation-delay: 780ms; }
+.arrival-window i { position: absolute; inset: 5px; background: #f3cb7c; opacity: 0; animation: lamp-on 450ms 740ms ease-out forwards; }
+.arrival-doorway { width: 58px; height: 82px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); overflow: visible; background: #f0c878; }
+.arrival-door-light { position: absolute; inset: -10px -13px; z-index: -1; background: #f3cf89; opacity: 0; filter: blur(13px); animation: doorway-glow 700ms 1130ms ease-out forwards; }
+.arrival-door { position: absolute; inset: 0; transform-origin: left center; transform-style: preserve-3d; border: 3px solid #e9d7b8; background: #315848; box-shadow: inset -5px 0 #426b57; animation: door-open 700ms 1080ms cubic-bezier(.2, .75, .25, 1) forwards; }
+.arrival-door i { width: 5px; height: 5px; position: absolute; top: 48%; right: 8px; border-radius: 50%; background: #e9bc6d; }
+.arrival-steps { width: 74px; height: 8px; position: absolute; bottom: -8px; left: 50%; z-index: 2; transform: translateX(-50%); border: 2px solid #c8b99e; border-radius: 2px; background: #e8ddc7; }
+.arrival-ground { width: min(390px, 94%); height: 3px; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: #9baa8f; }
+.arrival-enter { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 0 17px; border: 0; border-radius: 5px; color: #fff; background: #214b3d; cursor: pointer; font-size: 12px; font-weight: 600; opacity: 0; animation: welcome-arrive 450ms 850ms ease-out forwards; }
+.arrival-enter:hover { background: #173b30; }
+.home-arrival.is-leaving { pointer-events: none; animation: arrival-leave 460ms ease-in forwards; }
+@keyframes welcome-arrive { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes house-arrive { to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes window-warm { from { background: #80958a; } to { background: #f1ca7a; box-shadow: 0 0 19px rgb(238 192 111 / 39%); } }
+@keyframes lamp-on { to { opacity: 1; } }
+@keyframes doorway-glow { to { opacity: .85; } }
+@keyframes door-open { to { transform: rotateY(-62deg); } }
+@keyframes arrival-leave { to { opacity: 0; visibility: hidden; } }
 .brand { display: inline-flex; align-items: center; gap: 11px; }
 .brand-mark { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 8px; color: #fff; background: var(--forest); font-size: 18px; font-weight: 700; }
 .brand-copy { display: grid; gap: 2px; }
@@ -248,6 +283,13 @@ textarea { min-height: 102px; resize: vertical; padding: 10px 11px; line-height:
   .today-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+@media (max-width: 480px) {
+  .home-arrival { gap: 10px; padding: 26px 18px 22px; }
+  .arrival-welcome strong { font-size: 27px; }
+  .arrival-stage { min-height: 230px; }
+  .arrival-house { transform: translateY(16px) scale(.82); transform-origin: center bottom; }
+}
+
 @media (max-width: 650px) {
   .topbar, main, .footer { width: calc(100% - 36px); }
   .topbar { height: 67px; }
@@ -325,5 +367,6 @@ textarea { min-height: 102px; resize: vertical; padding: 10px 11px; line-height:
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation: none !important; }
+  .home-arrival { display: none !important; }
 }

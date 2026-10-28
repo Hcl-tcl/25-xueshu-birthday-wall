@@ -86,6 +86,7 @@ let pendingHeroPreviewUrl: string | null = null
 let selectedMonth = Number((data.demoDate ?? getLocalDateISO ()).slice (5, 7))
 let adminSignedIn = false
 let toastTimer = 0
+let arrivalTimer = 0
 
 const $ = <T extends HTMLElement> (selector: string): T | null => document.querySelector<T> (selector)
 const classmateGrid = $<HTMLElement>('#classmate-grid')
@@ -101,6 +102,8 @@ const nicknameInput = $<HTMLInputElement>('#nickname')
 const anonymousInput = $<HTMLInputElement>('#anonymous')
 const charCount = $<HTMLElement>('#char-count')
 const formStatus = $<HTMLElement>('#form-status')
+const homeArrival = $<HTMLElement>('#home-arrival')
+const arrivalEnter = $<HTMLButtonElement>('#arrival-enter')
 const adminDialog = $<HTMLDialogElement>('#admin-dialog')
 const adminAuth = $<HTMLElement>('#admin-auth')
 const adminTools = $<HTMLElement>('#admin-tools')
@@ -318,6 +321,13 @@ function announce (message: string): void {
   toast.classList.add ('is-visible')
   window.clearTimeout (toastTimer)
   toastTimer = window.setTimeout (() => toast.classList.remove ('is-visible'), 3200)
+}
+
+function dismissArrival (): void {
+  if (!homeArrival || homeArrival.hidden || homeArrival.classList.contains ('is-leaving')) return
+  window.clearTimeout (arrivalTimer)
+  homeArrival.classList.add ('is-leaving')
+  window.setTimeout (() => { homeArrival.hidden = true }, 480)
 }
 
 function el<K extends keyof HTMLElementTagNameMap> (tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -902,6 +912,14 @@ if (studentMonthInput) {
 updateDayOptions (1, 1)
 wireEvents ()
 renderAll ()
+if (homeArrival) {
+  if (window.matchMedia ('(prefers-reduced-motion: reduce)').matches) {
+    homeArrival.hidden = true
+  } else {
+    arrivalEnter?.addEventListener ('click', dismissArrival)
+    arrivalTimer = window.setTimeout (dismissArrival, 2050)
+  }
+}
 void initializeCloud ()
 window.addEventListener ('resize', centerSelectedMonth)
 window.addEventListener ('load', () => window.requestAnimationFrame (centerSelectedMonth), { once: true })

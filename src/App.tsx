@@ -1,5 +1,5 @@
 import { getLocalDateISO } from './data'
-import { ArrowDown, ArrowUpRight, CalendarDays, Gift, PartyPopper, PenLine, Settings2, Sparkles, WandSparkles, X, Plus } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, Gift, PartyPopper, PenLine, Settings2, Sparkles, WandSparkles, X, Plus } from 'lucide-react'
 
 const currentDate = getLocalDateISO ()
 const currentMonth = Number(currentDate.slice (5, 7))
@@ -7,6 +7,24 @@ const currentMonth = Number(currentDate.slice (5, 7))
 export function App () {
   return (
     <>
+      <div className='home-arrival' id='home-arrival' role='region' aria-label='欢迎回家'>
+        <div className='arrival-welcome'><span>25 学硕大家庭</span><strong>欢迎回家</strong></div>
+        <div className='arrival-stage' aria-hidden='true'>
+          <div className='arrival-house'>
+            <div className='arrival-chimney'></div>
+            <div className='arrival-roof'></div>
+            <div className='arrival-wall'>
+              <div className='arrival-attic-window'></div>
+              <div className='arrival-window arrival-window-left'><i></i></div>
+              <div className='arrival-window arrival-window-right'><i></i></div>
+              <div className='arrival-doorway'><div className='arrival-door-light'></div><div className='arrival-door'><i></i></div></div>
+            </div>
+            <div className='arrival-steps'></div>
+          </div>
+          <div className='arrival-ground'></div>
+        </div>
+        <button className='arrival-enter' id='arrival-enter' type='button'>进入生日墙 <ArrowRight size={16} aria-hidden='true' /></button>
+      </div>
       <header className='topbar'>
         <a className='brand' href='#top' aria-label='生日祝福墙首页'>
           <span className='brand-mark' aria-hidden='true'>25</span>
