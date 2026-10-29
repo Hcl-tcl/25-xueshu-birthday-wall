@@ -124,6 +124,11 @@ const heroImageInput = $<HTMLInputElement>('#hero-image-input')
 const heroImagePreview = $<HTMLImageElement>('#hero-image-preview')
 const heroForm = $<HTMLFormElement>('#hero-form')
 const rosterList = $<HTMLElement>('#roster-list')
+const wishAdminList = $<HTMLElement>('#wish-admin-list')
+const wishAdminStudent = $<HTMLSelectElement>('#wish-admin-student')
+const wishAdminSearch = $<HTMLInputElement>('#wish-admin-search')
+const wishAdminCount = $<HTMLElement>('#wish-admin-count')
+const wishAdminEmpty = $<HTMLElement>('#wish-admin-empty')
 const studentForm = $<HTMLFormElement>('#student-form')
 const studentIdInput = $<HTMLInputElement>('#student-id')
 const studentNameInput = $<HTMLInputElement>('#student-name')
@@ -835,6 +840,51 @@ function renderRoster (): void {
   const total = $<HTMLElement>('#admin-student-count')
   if (number) number.textContent = `${data.classmates.length} 位同学`
   if (total) total.textContent = String (data.classmates.length)
+  renderWishAdmin ()
+}
+
+function renderWishAdmin (): void {
+  if (!wishAdminList || !wishAdminStudent) return
+  const current = wishAdminStudent.value || 'all'
+  wishAdminStudent.replaceChildren (new Option ('全班寿星', 'all'))
+  for (const student of [...data.classmates].sort ((a, b) => a.name.localeCompare (b.name, 'zh-CN'))) wishAdminStudent.add (new Option (student.name, student.id))
+  wishAdminStudent.value = [...wishAdminStudent.options].some (option => option.value === current) ? current : 'all'
+  const selected = wishAdminStudent.value
+  const query = wishAdminSearch?.value.trim ().toLowerCase () ?? ''
+  const wishes = data.wishes.filter (wish => {
+    const recipient = data.classmates.find (student => student.id === wish.recipientId)
+    const text = `${recipient?.name ?? ''} ${wish.senderName} ${wish.message}`.toLowerCase ()
+    return (selected === 'all' || wish.recipientId === selected) && (!query || text.includes (query))
+  }).sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
+  if (wishAdminCount) wishAdminCount.textContent = `${wishes.length} 份祝福`
+  wishAdminList.replaceChildren ()
+  for (const wish of wishes) {
+    const recipient = data.classmates.find (student => student.id === wish.recipientId)
+    const row = el ('div', 'wish-admin-row')
+    const copy = el ('div', 'wish-admin-copy')
+    copy.append (el ('strong', '', `${recipient?.name ?? '未知同学'} · ${wish.birthdayYear ? `${wish.birthdayYear}年` : '年份未记录'}`), el ('p', '', wish.message), el ('span', '', `${wish.anonymous ? '匿名同学' : wish.senderName} · ${new Date (wish.createdAt).toLocaleDateString ('zh-CN')}`))
+    const remove = el ('button', 'row-delete-button', '删除')
+    remove.type = 'button'
+    remove.addEventListener ('click', () => { void deleteWishAsAdmin (wish.id) })
+    row.append (copy, remove)
+    wishAdminList.append (row)
+  }
+  if (wishAdminEmpty) wishAdminEmpty.hidden = wishes.length > 0
+}
+
+async function deleteWishAsAdmin (id: string): Promise<void> {
+  if (!window.confirm ('确定删除这条祝福吗？删除后无法恢复。')) return
+  if (supabase) {
+    const { error } = await supabase.from ('wishes').delete ().eq ('id', id)
+    if (error) { announce ('删除失败，请确认管理员权限。'); return }
+    await refreshCloudState ()
+  } else {
+    data.wishes = data.wishes.filter (wish => wish.id !== id)
+    persist ()
+    renderAll ()
+    renderRoster ()
+  }
+  announce ('祝福已删除。')
 }
 
 function resetStudentForm (): void {
@@ -1160,6 +1210,8 @@ function wireEvents (): void {
     adminDialog?.close ()
     announce ('已退出管理员。')
   })
+  wishAdminStudent?.addEventListener ('change', renderWishAdmin)
+  wishAdminSearch?.addEventListener ('input', renderWishAdmin)
   studentMonthInput?.addEventListener ('change', () => updateDayOptions (Number(studentMonthInput.value)))
   studentPhotoInput?.addEventListener ('change', () => {
     if (pendingStudentPhotoUrl) URL.revokeObjectURL (pendingStudentPhotoUrl)

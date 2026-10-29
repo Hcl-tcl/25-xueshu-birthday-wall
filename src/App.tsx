@@ -181,6 +181,15 @@ export function App () {
           </form>
           <div className='roster-heading'><strong>班级名单</strong><span id='roster-count'>12 位同学</span></div>
           <div className='roster-list' id='roster-list'></div>
+          <section className='wish-admin-section' aria-labelledby='wish-admin-title'>
+            <div className='roster-heading'><strong id='wish-admin-title'>祝福管理</strong><span id='wish-admin-count'>0 份祝福</span></div>
+            <div className='wish-admin-filters'>
+              <label className='accessibly-hidden' htmlFor='wish-admin-student'>筛选寿星</label><select className='text-input' id='wish-admin-student'><option value='all'>全班寿星</option></select>
+              <label className='accessibly-hidden' htmlFor='wish-admin-search'>搜索祝福</label><input className='text-input' id='wish-admin-search' type='search' placeholder='搜索祝福内容或署名' />
+            </div>
+            <div className='wish-admin-list' id='wish-admin-list'></div>
+            <p className='admin-error' id='wish-admin-empty' hidden>没有找到符合条件的祝福。</p>
+          </section>
           <div className='demo-date-panel'>
             <div><strong>生日当天演示</strong><span>临时选择一个日期，预览寿星当天页面。</span></div>
             <label className='accessibly-hidden' htmlFor='demo-date'>演示日期</label>

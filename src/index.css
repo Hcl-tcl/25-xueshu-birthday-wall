@@ -268,6 +268,15 @@ textarea { min-height: 102px; resize: vertical; padding: 10px 11px; line-height:
 .roster-heading { display: flex; justify-content: space-between; margin: 20px 2px 8px; color: #45534a; font-size: 11px; }
 .roster-heading span { color: #8b968e; font-size: 10px; }
 .roster-list { max-height: 245px; overflow: auto; border: 1px solid #e5eae5; border-radius: 5px; background: #fff; }
+.wish-admin-section { margin-top: 20px; }
+.wish-admin-filters { display: grid; grid-template-columns: 1fr 1.35fr; gap: 8px; margin: 9px 0; }
+.wish-admin-list { max-height: 270px; overflow: auto; border: 1px solid #e5eae5; border-radius: 5px; background: #fff; }
+.wish-admin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px; border-bottom: 1px solid #edf0ed; }
+.wish-admin-row:last-child { border-bottom: 0; }
+.wish-admin-copy { min-width: 0; }
+.wish-admin-copy strong { display: block; overflow: hidden; color: #3e4d43; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.wish-admin-copy p { margin: 5px 0; color: #59685e; font-size: 10px; line-height: 1.55; word-break: break-word; }
+.wish-admin-copy span { color: #9aa39c; font-size: 9px; }
 .roster-row { min-height: 47px; display: grid; grid-template-columns: 30px minmax(0, 1fr) 65px 91px; align-items: center; gap: 8px; padding: 0 10px; border-bottom: 1px solid #edf0ed; }
 .roster-photo-avatar { width: 28px; height: 28px; font-size: 10px; }
 .roster-row:last-child { border-bottom: 0; }
