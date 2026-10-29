@@ -13,8 +13,11 @@ create table if not exists public.classmates (
       else 31
     end
   ),
+  photo_path text,
   created_at timestamptz not null default now()
 );
+
+alter table public.classmates add column if not exists photo_path text;
 
 create table if not exists public.wishes (
   id uuid primary key default gen_random_uuid(),
@@ -22,8 +25,24 @@ create table if not exists public.wishes (
   sender_name text not null check (char_length(btrim(sender_name)) between 1 and 18),
   message text not null check (char_length(btrim(message)) between 1 and 140),
   anonymous boolean not null default false,
+  birthday_year integer,
   created_at timestamptz not null default now()
 );
+
+alter table public.wishes add column if not exists birthday_year integer;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'wishes_birthday_year_check'
+      and conrelid = 'public.wishes'::regclass
+  ) then
+    alter table public.wishes
+      add constraint wishes_birthday_year_check check (birthday_year is null or birthday_year between 1900 and 2200);
+  end if;
+end;
+$$;
 
 create table if not exists public.site_settings (
   id smallint primary key check (id = 1),
@@ -40,11 +59,25 @@ on conflict (id) do nothing;
 create index if not exists classmates_month_day_idx on public.classmates (month_day);
 create index if not exists wishes_created_at_idx on public.wishes (created_at desc);
 create index if not exists wishes_recipient_id_idx on public.wishes (recipient_id, created_at desc);
+create index if not exists wishes_birthday_year_idx on public.wishes (birthday_year, recipient_id);
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
   'class-birthday-wall-hero',
   'class-birthday-wall-hero',
+  true,
+  2097152,
+  array['image/jpeg', 'image/png', 'image/webp']::text[]
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'classmate-photos',
+  'classmate-photos',
   true,
   2097152,
   array['image/jpeg', 'image/png', 'image/webp']::text[]
@@ -126,6 +159,43 @@ create policy "Class admins can upload birthday wall hero images"
   on storage.objects for insert to authenticated
   with check (
     bucket_id = 'class-birthday-wall-hero'
+    and public.is_class_admin ()
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "Anyone can read classmate photos" on storage.objects;
+create policy "Anyone can read classmate photos"
+  on storage.objects for select to anon, authenticated
+  using (bucket_id = 'classmate-photos');
+
+drop policy if exists "Class admins can upload classmate photos" on storage.objects;
+create policy "Class admins can upload classmate photos"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'classmate-photos'
+    and public.is_class_admin ()
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "Class admins can update classmate photos" on storage.objects;
+create policy "Class admins can update classmate photos"
+  on storage.objects for update to authenticated
+  using (
+    bucket_id = 'classmate-photos'
+    and public.is_class_admin ()
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  )
+  with check (
+    bucket_id = 'classmate-photos'
+    and public.is_class_admin ()
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "Class admins can delete classmate photos" on storage.objects;
+create policy "Class admins can delete classmate photos"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'classmate-photos'
     and public.is_class_admin ()
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );

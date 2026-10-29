@@ -41,7 +41,7 @@ export function App () {
       <main id='top'>
         <section className='hero' aria-labelledby='page-title'>
           <div className='hero-copy'>
-            <p className='eyebrow'><span className='status-dot' /> 班级生日簿 <span className='demo-tag' id='connection-status'>可修改版</span></p>
+            <p className='eyebrow'><span className='status-dot' /> 班级生日簿</p>
             <h1 id='page-title'>每个生日，<br />都有全班的祝福。</h1>
             <p className='hero-description' id='hero-description'>记住同学的生日，在那一天把心意送到 TA 手上。</p>
             <div className='hero-actions'>
@@ -74,31 +74,31 @@ export function App () {
             <div><span className='section-kicker'>BIRTHDAY CALENDAR</span><h2 id='calendar-title'>班级生日簿</h2></div>
             <span className='month-hint'>按月份找寿星，给 TA 留一句话</span>
           </div>
-          <div className='month-tabs' role='tablist' aria-label='生日月份'>
-            {Array.from ({ length: 12 }, (_, index) => {
-              const month = index + 1
-              return <button className={`month-tab${month === currentMonth ? ' is-active' : ''}`} type='button' data-month-tab={month} aria-selected={month === currentMonth} role='tab' key={month}><span>{month}月</span><span className='month-count' data-month-count={month}>0</span></button>
-            })}
-          </div>
+          <div className='month-tabs' id='month-tabs' role='tablist' aria-label='按年份和月份排列的生日时间轴'></div>
+          <button className='timeline-expand' id='timeline-expand' type='button'>继续看下一年 <ArrowRight size={14} aria-hidden='true' /></button>
           <div className='month-preview-note' id='month-preview-note' hidden>
             <span className='preview-seal' aria-hidden='true'>✦</span>
             <div className='preview-copy'><strong id='month-preview-title'></strong><span id='month-preview-description'></span></div>
             <button className='copy-month-list' id='copy-month-list' type='button'><Copy size={14} aria-hidden='true' />复制寿星清单</button>
           </div>
-          <div className='calendar-caption'><strong><span data-month-label='number'>{currentMonth}</span>月生日的同学</strong><span id='month-birthday-count'>0 位寿星</span></div>
+          <div className='calendar-caption'><strong id='month-label'>{currentMonth}月生日的同学</strong><span id='month-birthday-count'>0 位寿星</span></div>
           <div className='classmate-grid' id='classmate-grid' aria-live='polite'></div>
           <div className='empty-state' id='month-empty' hidden><span className='empty-mark' aria-hidden='true'>✳</span><strong>这个月暂时没有生日</strong><span>换个月份看看，或者请管理员补充生日。</span></div>
         </section>
 
         <section className='wishes-section' id='wishes' aria-labelledby='wishes-title'>
           <div className='wishes-heading'>
-            <div><span className='section-kicker'>LITTLE NOTES, BIG SMILES</span><h2 id='wishes-title'>最近收到的祝福</h2></div>
-            <label className='wish-filter-label' htmlFor='wish-filter'>
-              <span>看谁收到的</span>
-              <select id='wish-filter' aria-label='筛选收到祝福的同学'><option value='all'>全班同学</option></select>
-            </label>
+            <div><span className='section-kicker'>LITTLE NOTES, BIG SMILES</span><h2 id='wishes-title'>这一个月，收到的温暖</h2></div>
+            <div className='wish-filters'>
+              <label className='wish-filter-label' htmlFor='wish-filter'>
+                <span>看谁收到的</span>
+                <select id='wish-filter' aria-label='筛选收到祝福的同学'><option value='all'>全班同学</option></select>
+              </label>
+            </div>
           </div>
+          <p className='wishes-period' id='wishes-period'>祝福按生日年份归档</p>
           <div className='wishes-grid' id='wishes-grid' aria-live='polite'></div>
+          <div className='legacy-wishes' id='legacy-wishes' hidden><strong>早期祝福 · 尚未归档年份</strong><div className='wishes-grid' id='legacy-wishes-grid'></div></div>
           <div className='empty-wishes' id='empty-wishes' hidden>还没有收到祝福，选一位寿星送上第一张卡片吧。</div>
         </section>
 
@@ -113,6 +113,8 @@ export function App () {
             <div className='write-panel-heading'><span className='write-icon' aria-hidden='true'><PenLine size={15} /></span><strong>写一张生日卡片</strong></div>
             <label className='field-label' htmlFor='recipient'>送给谁 <span>必选</span></label>
             <select className='text-input' id='recipient' name='recipient' required><option value=''>先选一位同学</option></select>
+            <label className='field-label wish-year-label' htmlFor='wish-birthday-year'>哪一年的生日</label>
+            <select className='text-input' id='wish-birthday-year' name='birthday-year' required></select>
             <label className='field-label' htmlFor='nickname'>你的称呼 <span>选填，留空匿名</span></label>
             <input className='text-input' id='nickname' name='nickname' maxLength={18} placeholder='留下昵称署名，或留空匿名送出' autoComplete='nickname' />
             <label className='field-label message-label' htmlFor='message'>祝福内容 <span>必填</span></label>
@@ -148,6 +150,7 @@ export function App () {
         </section>
         <section id='admin-tools' hidden>
           <div className='admin-notice'><span aria-hidden='true'>✳</span> 管理生日名单 · <strong id='admin-student-count'>12</strong> 位同学</div>
+          <div className='admin-schema-note' id='admin-schema-note' hidden>照片和跨年祝福归档需要更新一次数据库。<a href='https://github.com/Hcl-tcl/25-xueshu-birthday-wall/blob/main/supabase/migrations/20261029_birthday_timeline_and_photos.sql' target='_blank' rel='noreferrer'>打开升级 SQL</a></div>
           <section className='hero-editor'>
             <div className='roster-heading'><strong>横幅内容</strong><span>全班可见</span></div>
             <form id='hero-form'>
@@ -170,6 +173,10 @@ export function App () {
             <input className='text-input' id='student-name' maxLength={18} required placeholder='输入同学姓名' />
             <span className='field-label birthday-label'>生日日期</span>
             <div className='date-fields'><label className='accessibly-hidden' htmlFor='student-month'>月份</label><select className='text-input' id='student-month' required></select><label className='accessibly-hidden' htmlFor='student-day'>日期</label><select className='text-input' id='student-day' required></select></div>
+            <label className='field-label student-photo-label' htmlFor='student-photo'>寿星照片 <span>选填，照片会公开显示</span></label>
+            <div className='student-photo-tools'><div className='student-photo-preview' id='student-photo-preview' aria-live='polite'></div><button type='button' className='remove-student-photo' id='student-photo-remove' hidden>移除照片</button></div>
+            <input className='text-input student-photo-input' id='student-photo' type='file' accept='image/jpeg,image/png,image/webp' />
+            <p className='student-photo-help'>JPG、PNG 或 WebP，最大 2 MB。请先征得同学同意。</p>
             <div className='admin-form-actions'><button type='submit' className='submit-button' id='student-save'><Plus size={15} aria-hidden='true' /> 添加到生日簿 <ArrowUpRight size={15} aria-hidden='true' /></button><button type='button' className='cancel-edit' id='student-cancel' hidden>取消编辑</button></div>
           </form>
           <div className='roster-heading'><strong>班级名单</strong><span id='roster-count'>12 位同学</span></div>

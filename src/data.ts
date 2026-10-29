@@ -2,6 +2,8 @@ export type Classmate = {
   id: string
   name: string
   monthDay: string
+  photoPath?: string
+  photoSource?: string
 }
 
 export type BirthdayWish = {
@@ -12,6 +14,7 @@ export type BirthdayWish = {
   anonymous: boolean
   createdAt: string
   tone: string
+  birthdayYear?: number
 }
 
 export const seedClassmates: Classmate[] = [
@@ -31,17 +34,17 @@ export const seedClassmates: Classmate[] = [
 
 export const seedWishes: BirthdayWish[] = [
   {
-    id: 'w-001', recipientId: 'm-003', senderName: '匿名同学',
+    id: 'w-001', recipientId: 'm-003', senderName: '匿名同学', birthdayYear: 2026,
     message: '新的一岁继续闪闪发光，所有的小愿望都慢慢实现。',
     anonymous: true, createdAt: '2026-10-26T09:30:00.000Z', tone: 'tone-mint'
   },
   {
-    id: 'w-002', recipientId: 'm-004', senderName: '小同桌',
+    id: 'w-002', recipientId: 'm-004', senderName: '小同桌', birthdayYear: 2026,
     message: '生日快乐！祝你每天都有好心情，奶茶永远加满小料。',
     anonymous: false, createdAt: '2026-10-25T12:00:00.000Z', tone: 'tone-rose'
   },
   {
-    id: 'w-003', recipientId: 'm-001', senderName: '前排同学',
+    id: 'w-003', recipientId: 'm-001', senderName: '前排同学', birthdayYear: 2026,
     message: '预祝生日快乐！希望你拆开这一岁时，收到好多好多开心。',
     anonymous: false, createdAt: '2026-10-27T14:10:00.000Z', tone: 'tone-yellow'
   }

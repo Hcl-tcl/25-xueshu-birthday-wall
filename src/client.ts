@@ -27,6 +27,7 @@ const defaultHeroContent: HeroContent = {
   imageSource: './assets/birthday-cake.jpg'
 }
 const heroImageBucket = 'class-birthday-wall-hero'
+const classmatePhotoBucket = 'classmate-photos'
 
 const storageKey = 'shiguang-class-birthday-v2'
 const tones = ['tone-mint', 'tone-rose', 'tone-yellow', 'tone-lilac']
@@ -83,8 +84,17 @@ if (supabase) data = { ...data, classmates: [], wishes: [], heroContent: { ...de
 let cloudHeroImagePath: string | null = null
 let pendingHeroFile: File | null = null
 let pendingHeroPreviewUrl: string | null = null
-let selectedMonth = calendarMonthForDate (data.demoDate ?? getLocalDateISO ())
+let selectedDate = calendarDateForDate (data.demoDate ?? getLocalDateISO ())
+let selectedMonth = selectedDate.month
+let selectedYear = selectedDate.year
+let timelineMonths = makeTimeline (selectedDate)
 let adminSignedIn = false
+let photoSchemaReady = !supabase
+let birthdayYearSchemaReady = !supabase
+let pendingStudentPhoto: File | null = null
+let pendingStudentPhotoUrl: string | null = null
+let removeStudentPhoto = false
+let pendingBirthdayYear = selectedYear
 let toastTimer = 0
 let arrivalTimer = 0
 
@@ -95,6 +105,7 @@ const wishesGrid = $<HTMLElement>('#wishes-grid')
 const emptyWishes = $<HTMLElement>('#empty-wishes')
 const monthEmpty = $<HTMLElement>('#month-empty')
 const recipientSelect = $<HTMLSelectElement>('#recipient')
+const wishYearSelect = $<HTMLSelectElement>('#wish-birthday-year')
 const wishFilter = $<HTMLSelectElement>('#wish-filter')
 const wishForm = $<HTMLFormElement>('#wish-form')
 const messageInput = $<HTMLTextAreaElement>('#message')
@@ -118,6 +129,9 @@ const studentIdInput = $<HTMLInputElement>('#student-id')
 const studentNameInput = $<HTMLInputElement>('#student-name')
 const studentMonthInput = $<HTMLSelectElement>('#student-month')
 const studentDayInput = $<HTMLSelectElement>('#student-day')
+const studentPhotoInput = $<HTMLInputElement>('#student-photo')
+const studentPhotoPreview = $<HTMLElement>('#student-photo-preview')
+const studentPhotoRemove = $<HTMLButtonElement>('#student-photo-remove')
 const demoDateInput = $<HTMLInputElement>('#demo-date')
 const confettiBurst = confetti.create ($<HTMLCanvasElement>('#celebration-canvas')!, { resize: true, useWorker: true })
 
@@ -138,6 +152,20 @@ function persist (): boolean {
 function imageSourceForCloudPath (path: string | null): string {
   if (!path || !supabase) return defaultHeroContent.imageSource
   return supabase.storage.from (heroImageBucket).getPublicUrl (path).data.publicUrl
+}
+
+function imageSourceForClassmatePath (path: string | null): string {
+  if (!path || !supabase) return ''
+  return supabase.storage.from (classmatePhotoBucket).getPublicUrl (path).data.publicUrl
+}
+
+function isMissingColumnError (error: { code?: string, message?: string }, column: string): boolean {
+  return error.code === '42703' || error.code === 'PGRST204' || (error.message ?? '').toLowerCase ().includes (column)
+}
+
+function updateSchemaNotice (): void {
+  const note = $<HTMLElement>('#admin-schema-note')
+  if (note) note.hidden = !supabase || (photoSchemaReady && birthdayYearSchemaReady)
 }
 
 function renderHeroContent (): void {
@@ -231,7 +259,7 @@ async function handleHeroSave (event: SubmitEvent): Promise<void> {
   }
 }
 
-function readImageDataUrl (file: File): Promise<string> {
+function readImageDataUrl (file: Blob): Promise<string> {
   return new Promise ((resolve, reject) => {
     const reader = new FileReader ()
     reader.addEventListener ('load', () => {
@@ -246,27 +274,48 @@ function readImageDataUrl (file: File): Promise<string> {
 async function refreshCloudState (): Promise<boolean> {
   if (!supabase) return false
   const [classmatesResult, wishesResult, settingsResult] = await Promise.all([
-    supabase.from ('classmates').select ('id, name, month_day').order ('month_day'),
-    supabase.from ('wishes').select ('id, recipient_id, sender_name, message, anonymous, created_at').order ('created_at', { ascending: false }),
+    supabase.from ('classmates').select ('id, name, month_day, photo_path').order ('month_day'),
+    supabase.from ('wishes').select ('id, recipient_id, sender_name, message, anonymous, created_at, birthday_year').order ('created_at', { ascending: false }),
     supabase.from ('site_settings').select ('hero_title, hero_description, hero_image_path').eq ('id', 1).maybeSingle ()
   ])
-  if (classmatesResult.error || wishesResult.error || settingsResult.error) {
+  photoSchemaReady = !classmatesResult.error
+  birthdayYearSchemaReady = !wishesResult.error
+  let classmatesError = classmatesResult.error
+  let wishesError = wishesResult.error
+  let classmatesData: Array<{ id: string, name: string, month_day: string, photo_path?: string | null }> = classmatesResult.data ?? []
+  let wishesData: Array<{ id: string, recipient_id: string, sender_name: string, message: string, anonymous: boolean, created_at: string, birthday_year?: number | null }> = wishesResult.data ?? []
+  if (classmatesResult.error && isMissingColumnError (classmatesResult.error, 'photo_path')) {
+    const fallback = await supabase.from ('classmates').select ('id, name, month_day').order ('month_day')
+    classmatesError = fallback.error
+    classmatesData = fallback.data ?? []
+    photoSchemaReady = false
+  }
+  if (wishesResult.error && isMissingColumnError (wishesResult.error, 'birthday_year')) {
+    const fallback = await supabase.from ('wishes').select ('id, recipient_id, sender_name, message, anonymous, created_at').order ('created_at', { ascending: false })
+    wishesError = fallback.error
+    wishesData = fallback.data ?? []
+    birthdayYearSchemaReady = false
+  }
+  if (classmatesError || wishesError || settingsResult.error) {
     announce ('共享生日簿暂时无法读取，请检查 Supabase 配置和数据库权限。')
     return false
   }
-  data.classmates = (classmatesResult.data ?? []).map (student => ({
+  data.classmates = classmatesData.map (student => ({
     id: student.id,
     name: student.name,
-    monthDay: student.month_day
+    monthDay: student.month_day,
+    photoPath: student.photo_path ?? undefined,
+    photoSource: student.photo_path ? imageSourceForClassmatePath (student.photo_path) : undefined
   }))
-  data.wishes = (wishesResult.data ?? []).map ((wish, index) => ({
+  data.wishes = wishesData.map ((wish, index) => ({
     id: wish.id,
     recipientId: wish.recipient_id,
     senderName: wish.sender_name,
     message: wish.message,
     anonymous: wish.anonymous,
     createdAt: wish.created_at,
-    tone: tones[index % tones.length]
+    tone: tones[index % tones.length],
+    birthdayYear: wish.birthday_year ?? undefined
   }))
   cloudHeroImagePath = settingsResult.data?.hero_image_path ?? null
   data.heroContent = settingsResult.data
@@ -278,6 +327,7 @@ async function refreshCloudState (): Promise<boolean> {
     : { ...defaultHeroContent }
   renderAll ()
   if (adminSignedIn) renderRoster ()
+  updateSchemaNotice ()
   return true
 }
 
@@ -344,14 +394,55 @@ function currentDate (): string {
   return data.demoDate ?? getLocalDateISO ()
 }
 
-function calendarMonthForDate (dateISO: string): number {
+function calendarDateForDate (dateISO: string): { year: number, month: number } {
   const date = localDate (dateISO)
   const lastDay = new Date (date.getFullYear (), date.getMonth () + 1, 0).getDate ()
-  return date.getDate () === lastDay ? date.getMonth () === 11 ? 1 : date.getMonth () + 2 : date.getMonth () + 1
+  const previewing = date.getDate () === lastDay
+  const next = new Date (date.getFullYear (), date.getMonth () + (previewing ? 1 : 0), 1)
+  return { year: next.getFullYear (), month: next.getMonth () + 1 }
 }
 
-function isMonthPreview (dateISO: string, month: number): boolean {
-  return calendarMonthForDate (dateISO) !== Number(dateISO.slice (5, 7)) && calendarMonthForDate (dateISO) === month
+function addCalendarMonths (start: { year: number, month: number }, offset: number): { year: number, month: number } {
+  const date = new Date (start.year, start.month - 1 + offset, 1)
+  return { year: date.getFullYear (), month: date.getMonth () + 1 }
+}
+
+function isMonthPreview (dateISO: string, year: number, month: number): boolean {
+  const anchor = { year: Number (dateISO.slice (0, 4)), month: Number (dateISO.slice (5, 7)) }
+  return year > anchor.year || (year === anchor.year && month > anchor.month)
+}
+
+function monthIndex (date: { year: number, month: number }): number {
+  return date.year * 12 + date.month - 1
+}
+
+function makeTimeline (anchor: { year: number, month: number }): Array<{ year: number, month: number }> {
+  const launch = { year: 2026, month: 10 }
+  const start = monthIndex (anchor) < monthIndex (launch) ? anchor : launch
+  return Array.from ({ length: monthIndex (anchor) - monthIndex (start) + 12 }, (_, index) => addCalendarMonths (start, index))
+}
+
+function selectTimelineDate (year: number, month: number): void {
+  selectedYear = year
+  selectedMonth = month
+  while (monthIndex (timelineMonths[timelineMonths.length - 1]) < monthIndex ({ year, month })) {
+    const last = timelineMonths[timelineMonths.length - 1]
+    timelineMonths.push (addCalendarMonths (last, 1))
+  }
+  while (monthIndex (timelineMonths[0]) > monthIndex ({ year, month })) {
+    timelineMonths.unshift (addCalendarMonths (timelineMonths[0], -1))
+  }
+  renderTimeline ()
+  renderMonth ()
+  renderWishes ()
+  window.requestAnimationFrame (centerSelectedMonth)
+}
+
+function resetTimelineFromDate (dateISO: string): void {
+  selectedDate = calendarDateForDate (dateISO)
+  selectedYear = selectedDate.year
+  selectedMonth = selectedDate.month
+  timelineMonths = makeTimeline (selectedDate)
 }
 
 function formatMonthDay (monthDay: string): string {
@@ -359,8 +450,12 @@ function formatMonthDay (monthDay: string): string {
   return `${month}月${String (day).padStart (2, '0')}日`
 }
 
-function wishedCount (id: string): number {
-  return data.wishes.filter (wish => wish.recipientId === id).length
+function wishedCount (id: string, year = selectedYear): number {
+  return data.wishes.filter (wish => wish.recipientId === id && wish.birthdayYear === year).length
+}
+
+function legacyWishedCount (id: string): number {
+  return data.wishes.filter (wish => wish.recipientId === id && !wish.birthdayYear).length
 }
 
 function classmatesForMonth (month: number): Classmate[] {
@@ -393,7 +488,9 @@ function celebrate (): void {
   window.setTimeout (() => confettiBurst ({ particleCount: 35, angle: 120, spread: 54, origin: { x: 0.94, y: 0.78 }, colors }), 290)
 }
 
-function openWishForm (studentId: string): void {
+function openWishForm (studentId: string, birthdayYear = selectedYear): void {
+  pendingBirthdayYear = birthdayYear
+  populateWishYears ()
   if (recipientSelect) recipientSelect.value = studentId
   if (messageInput) messageInput.focus ({ preventScroll: true })
   $('#write')?.scrollIntoView ({ behavior: 'smooth', block: 'start' })
@@ -425,7 +522,7 @@ function renderToday (): void {
     todayContent.append (banner)
     const cards = el ('div', 'today-cards')
     for (const student of birthdayStudents) {
-      cards.append (makeTodayCard (student, true, 0))
+      cards.append (makeTodayCard (student, true, 0, date.getFullYear ()))
     }
     todayContent.append (cards)
     return
@@ -451,22 +548,23 @@ function renderToday (): void {
 
   const cards = el ('div', 'today-cards')
   for (const item of upcoming.slice (0, 3)) {
-    cards.append (makeTodayCard (item.student, false, item.days))
+    cards.append (makeTodayCard (item.student, false, item.days, item.date.getFullYear ()))
   }
   todayContent.append (cards)
 }
 
-function makeTodayCard (student: Classmate, birthdayToday: boolean, days: number): HTMLElement {
+function makeTodayCard (student: Classmate, birthdayToday: boolean, days: number, birthdayYear: number): HTMLElement {
   const card = el ('article', `today-person${birthdayToday ? ' is-today' : ''}`)
   const badge = el ('span', `person-avatar ${tones[Number(student.id.replace(/\D/g, '')) % tones.length] ?? tones[0]}`, student.name.slice (0, 1))
   badge.setAttribute ('aria-hidden', 'true')
+  appendStudentPhoto (badge, student)
   const details = el ('div', 'today-person-copy')
-  details.append (el ('strong', '', student.name), el ('span', 'today-person-date', formatMonthDay (student.monthDay)))
+  details.append (el ('strong', '', student.name), el ('span', 'today-person-date', `${birthdayYear}年 · ${formatMonthDay (student.monthDay)}`))
   const countdown = birthdayToday ? '今天生日' : days === 1 ? '明天生日' : `${days} 天后`
   const daysBadge = el ('span', `days-badge${birthdayToday ? ' is-birthday' : ''}`, countdown)
   const button = el ('button', 'small-wish-button', birthdayToday ? '送祝福' : '提前写卡')
   button.type = 'button'
-  button.addEventListener ('click', () => openWishForm (student.id))
+  button.addEventListener ('click', () => openWishForm (student.id, birthdayYear))
   card.append (badge, details, daysBadge, button)
   return card
 }
@@ -477,24 +575,61 @@ function renderMonth (): void {
   const previewNote = $<HTMLElement>('#month-preview-note')
   const previewTitle = $<HTMLElement>('#month-preview-title')
   const previewDescription = $<HTMLElement>('#month-preview-description')
-  const previewingNextMonth = isMonthPreview (currentDate (), selectedMonth)
+  const previewingNextMonth = isMonthPreview (currentDate (), selectedYear, selectedMonth)
   if (previewNote) previewNote.hidden = !previewingNextMonth
-  if (previewTitle) previewTitle.textContent = `${selectedMonth}月生日墙提前开门啦`
+  if (previewTitle) previewTitle.textContent = `${selectedYear}年${selectedMonth}月生日墙提前开门啦`
   if (previewDescription) previewDescription.textContent = students.length
-    ? `本月有 ${students.length} 位寿星，大家现在就可以提前送上祝福。`
+    ? `${selectedYear}年${selectedMonth}月有 ${students.length} 位寿星，大家现在就可以提前送上祝福。`
     : '这个月暂时还没有生日名单，管理员补充后会显示在这里。'
-  const label = $<HTMLElement>('[data-month-label="number"]')
-  if (label) label.textContent = String (selectedMonth)
+  const label = $<HTMLElement>('#month-label')
+  if (label) label.textContent = `${selectedYear}年${selectedMonth}月生日的同学`
   const count = $<HTMLElement>('#month-birthday-count')
   if (count) count.textContent = `${students.length} 位寿星`
   classmateGrid.replaceChildren ()
   for (const student of students) classmateGrid.append (makeClassmateCard (student))
   monthEmpty.hidden = students.length > 0
 
-  for (let month = 1; month <= 12; month += 1) {
-    const badge = $<HTMLElement>(`[data-month-count="${month}"]`)
-    if (badge) badge.textContent = String (classmatesForMonth (month).length)
+}
+
+function renderTimeline (): void {
+  const tabList = $<HTMLElement>('#month-tabs')
+  if (!tabList) return
+  tabList.replaceChildren ()
+  for (const item of timelineMonths) {
+    const button = el ('button', `month-tab${item.year === selectedYear && item.month === selectedMonth ? ' is-active' : ''}`)
+    button.type = 'button'
+    button.setAttribute ('role', 'tab')
+    button.dataset.year = String (item.year)
+    button.dataset.month = String (item.month)
+    button.setAttribute ('aria-selected', String (item.year === selectedYear && item.month === selectedMonth))
+    button.setAttribute ('aria-label', `${item.year}年${item.month}月，${classmatesForMonth (item.month).length} 位寿星`)
+    const date = el ('span', 'month-tab-date', `${String (item.year).slice (-2)}.${String (item.month).padStart (2, '0')}`)
+    const count = el ('span', 'month-count', String (classmatesForMonth (item.month).length))
+    button.append (date, count)
+    button.addEventListener ('click', () => selectTimelineDate (item.year, item.month))
+    button.addEventListener ('keydown', event => {
+      if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes (event.key)) return
+      const buttons = [...tabList.querySelectorAll<HTMLButtonElement>('.month-tab')]
+      const index = buttons.indexOf (button)
+      const next = event.key === 'ArrowRight' ? Math.min (index + 1, buttons.length - 1) : event.key === 'ArrowLeft' ? Math.max (index - 1, 0) : event.key === 'Home' ? 0 : buttons.length - 1
+      if (next === index) return
+      event.preventDefault ()
+      const targetYear = Number (buttons[next].dataset.year)
+      const targetMonth = Number (buttons[next].dataset.month)
+      selectTimelineDate (targetYear, targetMonth)
+      tabList.querySelector<HTMLButtonElement>(`[data-year="${targetYear}"][data-month="${targetMonth}"]`)?.focus ()
+    })
+    tabList.append (button)
   }
+  const expand = $<HTMLButtonElement>('#timeline-expand')
+  if (expand) expand.hidden = timelineMonths[timelineMonths.length - 1].year >= 2199
+}
+
+function populateWishYears (): void {
+  if (!wishYearSelect) return
+  const years = [...new Set ([pendingBirthdayYear, ...timelineMonths.map (item => item.year)])].sort ((a, b) => a - b)
+  wishYearSelect.replaceChildren (...years.map (year => new Option (`${year} 年生日`, String (year))))
+  wishYearSelect.value = String (pendingBirthdayYear)
 }
 
 function makeClassmateCard (student: Classmate): HTMLElement {
@@ -503,14 +638,16 @@ function makeClassmateCard (student: Classmate): HTMLElement {
   const top = el ('div', 'classmate-card-top')
   const avatar = el ('span', `person-avatar ${tones[Number(student.id.replace(/\D/g, '')) % tones.length] ?? tones[0]}`, student.name.slice (0, 1))
   avatar.setAttribute ('aria-hidden', 'true')
+  appendStudentPhoto (avatar, student)
   const date = el ('time', 'birthday-date', formatMonthDay (student.monthDay))
   top.append (avatar, date)
   card.append (top, el ('h3', 'classmate-name', student.name))
-  const count = el ('span', 'classmate-wish-count', wishes ? `已收到 ${wishes} 份祝福` : '等第一份生日祝福')
+  const oldWishes = legacyWishedCount (student.id)
+  const count = el ('span', 'classmate-wish-count', wishes ? `已收到 ${wishes} 份祝福` : oldWishes ? `往年有 ${oldWishes} 份祝福，等今年第一份` : '等第一份生日祝福')
   card.append (count)
   const button = el ('button', 'card-wish-button', wishes ? '再写一张卡' : '送上第一份祝福')
   button.type = 'button'
-  button.addEventListener ('click', () => openWishForm (student.id))
+  button.addEventListener ('click', () => openWishForm (student.id, selectedYear))
   card.append (button)
   return card
 }
@@ -538,29 +675,73 @@ function renderWishes (): void {
   if (!wishesGrid || !emptyWishes) return
   const filterId = wishFilter?.value ?? 'all'
   const filtered = [...data.wishes]
-    .filter (wish => filterId === 'all' || wish.recipientId === filterId)
+    .filter (wish => {
+      const recipient = data.classmates.find (student => student.id === wish.recipientId)
+      return wish.birthdayYear === selectedYear && Number (recipient?.monthDay.slice (0, 2)) === selectedMonth && (filterId === 'all' || wish.recipientId === filterId)
+    })
     .sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
   wishesGrid.replaceChildren ()
-  for (const wish of filtered.slice (0, 12)) {
+  renderWishCards (wishesGrid, filtered.slice (0, 12))
+  emptyWishes.hidden = filtered.length > 0
+  const legacyGrid = $<HTMLElement>('#legacy-wishes-grid')
+  const legacySection = $<HTMLElement>('#legacy-wishes')
+  const legacy = data.wishes.filter (wish => {
+    const recipient = data.classmates.find (student => student.id === wish.recipientId)
+    return !wish.birthdayYear && Number (recipient?.monthDay.slice (0, 2)) === selectedMonth && (filterId === 'all' || wish.recipientId === filterId)
+  }).sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
+  if (legacyGrid && legacySection) {
+    legacyGrid.replaceChildren ()
+    renderWishCards (legacyGrid, legacy.slice (0, 6))
+    legacySection.hidden = legacy.length === 0
+  }
+  emptyWishes.hidden = filtered.length > 0 || legacy.length > 0
+}
+
+function renderWishCards (grid: HTMLElement, wishes: BirthdayWish[]): void {
+  for (const wish of wishes) {
     const recipient = data.classmates.find (student => student.id === wish.recipientId)
     if (!recipient) continue
     const card = el ('article', `wish-card ${wish.tone}`)
-    card.append (el ('span', 'wish-recipient', `TO  ${recipient.name}`))
+    const yearTag = el ('span', `wish-recipient${wish.birthdayYear ? '' : ' is-unassigned'}`, wish.birthdayYear ? `${wish.birthdayYear} 年生日 · TO  ${recipient.name}` : `年份未记录 · TO  ${recipient.name}`)
+    card.append (yearTag)
+    const recipientPhoto = el ('span', `wish-recipient-photo ${tones[Number(recipient.id.replace(/\D/g, '')) % tones.length] ?? tones[0]}`, recipient.name.slice (0, 1))
+    appendStudentPhoto (recipientPhoto, recipient)
+    card.append (recipientPhoto)
     const quote = el ('p', 'wish-message', wish.message)
     card.append (quote)
     const meta = el ('div', 'wish-meta')
     const avatar = el ('span', 'wish-avatar', wish.senderName.slice (0, 1))
     avatar.setAttribute ('aria-hidden', 'true')
-    meta.append (avatar, el ('strong', '', wish.anonymous ? '匿名同学' : wish.senderName), el ('time', '', new Date (wish.createdAt).toLocaleDateString ('zh-CN', { month: 'numeric', day: 'numeric' })))
+    meta.append (avatar, el ('strong', '', wish.anonymous ? '匿名同学' : wish.senderName), el ('time', '', new Date (wish.createdAt).toLocaleDateString ('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric' })))
     card.append (meta, el ('span', 'wish-flower', ['✿', '✦', '❋', '✳'][Math.abs(wish.id.length + wish.message.length) % 4]))
-    wishesGrid.append (card)
+    grid.append (card)
   }
-  emptyWishes.hidden = filtered.length > 0
+}
+
+function updateWishDateFromRecipient (): void {
+  const student = data.classmates.find (item => item.id === recipientSelect?.value)
+  if (!student) return
+  if (student.monthDay.slice (0, 2) !== String (selectedMonth).padStart (2, '0')) {
+    const nextDate = daysUntil (student.monthDay, currentDate ()).date
+    selectTimelineDate (nextDate.getFullYear (), nextDate.getMonth () + 1)
+  }
+  pendingBirthdayYear = selectedYear
+  populateWishYears ()
+}
+
+function appendStudentPhoto (avatar: HTMLElement, student: Classmate): void {
+  if (!student.photoSource) return
+  const image = el ('img', 'person-photo')
+  image.src = student.photoSource
+  image.alt = ''
+  image.setAttribute ('aria-hidden', 'true')
+  image.addEventListener ('error', () => image.remove (), { once: true })
+  avatar.append (image)
 }
 
 function centerSelectedMonth (): void {
   const tabList = $<HTMLElement>('.month-tabs')
-  const activeTab = $<HTMLElement>(`[data-month-tab="${selectedMonth}"]`)
+  const activeTab = $<HTMLElement>(`[data-year="${selectedYear}"][data-month="${selectedMonth}"]`)
   if (!tabList || !activeTab || tabList.scrollWidth <= tabList.clientWidth) return
   const tabBounds = activeTab.getBoundingClientRect ()
   const listBounds = tabList.getBoundingClientRect ()
@@ -569,11 +750,7 @@ function centerSelectedMonth (): void {
 
 function renderAll (): void {
   renderHeroContent ()
-  document.querySelectorAll<HTMLButtonElement>('.month-tab').forEach (tab => {
-    const active = Number(tab.dataset.monthTab) === selectedMonth
-    tab.classList.toggle ('is-active', active)
-    tab.setAttribute ('aria-selected', String(active))
-  })
+  renderTimeline ()
   window.requestAnimationFrame (centerSelectedMonth)
   const count = $<HTMLElement>('#classmate-total')
   if (count) count.textContent = String (data.classmates.length)
@@ -584,6 +761,9 @@ function renderAll (): void {
   populateRecipientSelect ()
   populateWishFilter ()
   renderWishes ()
+  populateWishYears ()
+  const wishesPeriod = $<HTMLElement>('#wishes-period')
+  if (wishesPeriod) wishesPeriod.textContent = `${selectedYear}年${selectedMonth}月的生日祝福；未升级前的旧祝福会单独列出。`
 }
 
 function updateDayOptions (month: number, selectedDay?: number): void {
@@ -603,7 +783,9 @@ function renderRoster (): void {
   rosterList.replaceChildren ()
   for (const student of [...data.classmates].sort ((a, b) => a.monthDay.localeCompare (b.monthDay) || a.name.localeCompare (b.name, 'zh-CN'))) {
     const row = el ('div', 'roster-row')
-    row.append (el ('strong', '', student.name), el ('time', '', formatMonthDay (student.monthDay)))
+    const photo = el ('span', `person-avatar roster-photo-avatar ${tones[Number(student.id.replace(/\D/g, '')) % tones.length] ?? tones[0]}`, student.name.slice (0, 1))
+    appendStudentPhoto (photo, student)
+    row.append (photo, el ('strong', '', student.name), el ('time', '', formatMonthDay (student.monthDay)))
     const actions = el ('div', 'roster-actions')
     const edit = el ('button', 'row-icon-button', '编辑')
     edit.type = 'button'
@@ -614,6 +796,12 @@ function renderRoster (): void {
       if (studentMonthInput) studentMonthInput.value = String (month).padStart (2, '0')
       updateDayOptions (month, day)
       if (studentDayInput) studentDayInput.value = String (day).padStart (2, '0')
+      if (pendingStudentPhotoUrl) URL.revokeObjectURL (pendingStudentPhotoUrl)
+      pendingStudentPhotoUrl = null
+      pendingStudentPhoto = null
+      removeStudentPhoto = false
+      setStudentPhotoPreview (student.photoSource)
+      if (studentPhotoRemove) studentPhotoRemove.hidden = !student.photoSource
       const save = $<HTMLElement>('#student-save')
       if (save) save.innerHTML = '保存生日修改 <span aria-hidden="true">↗</span>'
       $<HTMLElement>('#student-cancel')?.removeAttribute ('hidden')
@@ -625,6 +813,7 @@ function renderRoster (): void {
     remove.addEventListener ('click', () => { void (async () => {
       if (!window.confirm (`移除 ${student.name}，并同时移除这位同学收到的祝福？`)) return
       if (supabase) {
+        if (student.photoPath) await supabase.storage.from (classmatePhotoBucket).remove ([student.photoPath])
         const { error } = await supabase.from ('classmates').delete ().eq ('id', student.id)
         if (error) {
           announce ('移除失败，请确认管理员账号仍有权限。')
@@ -652,13 +841,78 @@ function renderRoster (): void {
 }
 
 function resetStudentForm (): void {
+  if (pendingStudentPhotoUrl) URL.revokeObjectURL (pendingStudentPhotoUrl)
+  pendingStudentPhotoUrl = null
+  pendingStudentPhoto = null
+  removeStudentPhoto = false
   studentForm?.reset ()
   if (studentIdInput) studentIdInput.value = ''
   if (studentMonthInput) studentMonthInput.value = '01'
   updateDayOptions (1, 1)
+  setStudentPhotoPreview ()
+  if (studentPhotoRemove) studentPhotoRemove.hidden = true
   const save = $<HTMLElement>('#student-save')
   if (save) save.innerHTML = '添加到生日簿 <span aria-hidden="true">↗</span>'
   $<HTMLElement>('#student-cancel')?.setAttribute ('hidden', '')
+}
+
+function setStudentPhotoPreview (source?: string): void {
+  if (!studentPhotoPreview) return
+  studentPhotoPreview.replaceChildren ()
+  if (!source) {
+    studentPhotoPreview.append (el ('span', 'student-photo-empty', '尚未添加寿星照片'))
+    return
+  }
+  const image = el ('img', 'student-photo-thumb')
+  image.src = source
+  image.alt = '寿星照片预览'
+  image.addEventListener ('error', () => setStudentPhotoPreview (), { once: true })
+  studentPhotoPreview.append (image)
+}
+
+function compressStudentPhoto (file: File): Promise<Blob> {
+  return new Promise ((resolve, reject) => {
+    const objectUrl = URL.createObjectURL (file)
+    const image = new Image ()
+    image.onload = () => {
+      URL.revokeObjectURL (objectUrl)
+      const scale = Math.min (1, 640 / Math.max (image.naturalWidth, image.naturalHeight))
+      const canvas = document.createElement ('canvas')
+      canvas.width = Math.max (1, Math.round (image.naturalWidth * scale))
+      canvas.height = Math.max (1, Math.round (image.naturalHeight * scale))
+      const context = canvas.getContext ('2d')
+      if (!context) return reject (new Error ('Photo could not be processed'))
+      context.drawImage (image, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob (blob => blob ? resolve (blob) : reject (new Error ('Photo could not be processed')), 'image/jpeg', 0.78)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL (objectUrl)
+      reject (new Error ('Photo could not be read'))
+    }
+    image.src = objectUrl
+  })
+}
+
+async function saveCloudStudentPhoto (id: string, previousPath?: string): Promise<void> {
+  if (!supabase) return
+  if (pendingStudentPhoto) {
+    const blob = await compressStudentPhoto (pendingStudentPhoto)
+    const { data: { user } } = await supabase.auth.getUser ()
+    if (!user) throw new Error ('管理员登录已失效，请重新登录。')
+    const path = `${user.id}/${id}/${globalThis.crypto?.randomUUID?.() ?? Date.now ()}.jpg`
+    const { error: uploadError } = await supabase.storage.from (classmatePhotoBucket).upload (path, blob, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false })
+    if (uploadError) throw uploadError
+    const { error: updateError } = await supabase.from ('classmates').update ({ photo_path: path }).eq ('id', id)
+    if (updateError) {
+      await supabase.storage.from (classmatePhotoBucket).remove ([path])
+      throw updateError
+    }
+    if (previousPath) await supabase.storage.from (classmatePhotoBucket).remove ([previousPath])
+  } else if (removeStudentPhoto) {
+    const { error } = await supabase.from ('classmates').update ({ photo_path: null }).eq ('id', id)
+    if (error) throw error
+    if (previousPath) await supabase.storage.from (classmatePhotoBucket).remove ([previousPath])
+  }
 }
 
 function openAdmin (): void {
@@ -723,29 +977,19 @@ async function handleAdminLogin (event: SubmitEvent): Promise<void> {
 }
 
 function wireEvents (): void {
-  document.querySelectorAll<HTMLButtonElement>('[data-month-tab]').forEach (tab => {
-    tab.addEventListener ('click', () => {
-      selectedMonth = Number (tab.dataset.monthTab)
-      document.querySelectorAll ('.month-tab').forEach (item => {
-        item.classList.toggle ('is-active', item === tab)
-        item.setAttribute ('aria-selected', String(item === tab))
-      })
-      renderMonth ()
-      window.requestAnimationFrame (centerSelectedMonth)
-    })
-    tab.addEventListener ('keydown', event => {
-      const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-month-tab]')]
-      const index = tabs.indexOf (tab)
-      const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : index
-      if (next === index) return
-      event.preventDefault ()
-      tabs[next].focus ()
-      tabs[next].click ()
-    })
+  $('#timeline-expand')?.addEventListener ('click', () => {
+    const last = timelineMonths[timelineMonths.length - 1]
+    timelineMonths.push (...Array.from ({ length: 12 }, (_, index) => addCalendarMonths (last, index + 1)))
+    renderTimeline ()
   })
 
   wishFilter?.addEventListener ('change', renderWishes)
   recipientSelect?.addEventListener ('change', () => {
+    updateWishDateFromRecipient ()
+    if (formStatus) formStatus.textContent = ''
+  })
+  wishYearSelect?.addEventListener ('change', () => {
+    pendingBirthdayYear = Number (wishYearSelect.value)
     if (formStatus) formStatus.textContent = ''
   })
   messageInput?.addEventListener ('input', () => {
@@ -778,7 +1022,7 @@ function wireEvents (): void {
     const lines = [...grouped.entries ()]
       .sort(([a], [b]) => a.localeCompare (b))
       .map(([day, names]) => `${Number(day)}日：${names.join ('、')}`)
-    const text = [`${selectedMonth}月生日墙提前开门啦 🎂`, ...lines, '', `来这里送祝福：${window.location.href.split ('#')[0]}`].join ('\n')
+    const text = [`${selectedYear}年${selectedMonth}月生日墙提前开门啦 🎂`, ...lines, '', `来这里送祝福：${window.location.href.split ('#')[0]}`].join ('\n')
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText (text)
@@ -811,13 +1055,23 @@ function wireEvents (): void {
     const nickname = nicknameInput.value.trim ()
     const anonymous = !nickname
     const senderName = nickname || '匿名同学'
+    let savedToYearArchive = true
     if (supabase) {
-      const { error } = await supabase.from ('wishes').insert ({
+      const payload = {
         recipient_id: student.id,
         sender_name: senderName,
         message,
-        anonymous
-      })
+        anonymous,
+        birthday_year: pendingBirthdayYear
+      }
+      let { error } = await supabase.from ('wishes').insert (payload)
+      if (error && isMissingColumnError (error, 'birthday_year')) {
+        birthdayYearSchemaReady = false
+        savedToYearArchive = false
+        updateSchemaNotice ()
+        const retry = await supabase.from ('wishes').insert ({ recipient_id: student.id, sender_name: senderName, message, anonymous })
+        error = retry.error
+      }
       if (error) {
         if (formStatus) formStatus.textContent = '祝福暂时没有送出，请稍后重试。'
         return
@@ -831,15 +1085,18 @@ function wireEvents (): void {
         message,
         anonymous,
         createdAt: new Date ().toISOString (),
-        tone: tones[data.wishes.length % tones.length]
+        tone: tones[data.wishes.length % tones.length],
+        birthdayYear: pendingBirthdayYear
       }
       data.wishes.unshift (wish)
       persist ()
     }
-    selectedMonth = Number (student.monthDay.slice (0, 2))
+    selectTimelineDate (pendingBirthdayYear, Number (student.monthDay.slice (0, 2)))
     renderAll ()
     if (recipientSelect) recipientSelect.value = student.id
-    if (formStatus) formStatus.textContent = `送给 ${student.name} 的生日卡已经放进祝福墙。`
+    if (formStatus) formStatus.textContent = savedToYearArchive
+      ? `送给 ${student.name} 的 ${pendingBirthdayYear} 年生日卡已经放进祝福墙。`
+      : `祝福已送出。管理员运行数据库升级 SQL 后，新卡片才能按年份归档。`
     messageInput.value = ''
     if (charCount) charCount.textContent = '0'
     celebrate ()
@@ -885,6 +1142,39 @@ function wireEvents (): void {
     announce ('已退出管理员。')
   })
   studentMonthInput?.addEventListener ('change', () => updateDayOptions (Number(studentMonthInput.value)))
+  studentPhotoInput?.addEventListener ('change', () => {
+    if (pendingStudentPhotoUrl) URL.revokeObjectURL (pendingStudentPhotoUrl)
+    pendingStudentPhotoUrl = null
+    pendingStudentPhoto = studentPhotoInput.files?.[0] ?? null
+    removeStudentPhoto = false
+    if (!pendingStudentPhoto) {
+      const existing = data.classmates.find (student => student.id === studentIdInput?.value)
+      setStudentPhotoPreview (existing?.photoSource)
+      if (studentPhotoRemove) studentPhotoRemove.hidden = !existing?.photoSource
+      return
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes (pendingStudentPhoto.type) || pendingStudentPhoto.size > 2 * 1024 * 1024) {
+      pendingStudentPhoto = null
+      studentPhotoInput.value = ''
+      setStudentPhotoPreview (data.classmates.find (student => student.id === studentIdInput?.value)?.photoSource)
+      if (studentPhotoRemove) studentPhotoRemove.hidden = !data.classmates.find (student => student.id === studentIdInput?.value)?.photoSource
+      announce ('请选择 JPG、PNG 或 WebP 图片，且文件不超过 2 MB。')
+      return
+    }
+    pendingStudentPhotoUrl = URL.createObjectURL (pendingStudentPhoto)
+    setStudentPhotoPreview (pendingStudentPhotoUrl)
+    if (studentPhotoRemove) studentPhotoRemove.hidden = false
+  })
+  studentPhotoRemove?.addEventListener ('click', () => {
+    if (pendingStudentPhotoUrl) URL.revokeObjectURL (pendingStudentPhotoUrl)
+    pendingStudentPhotoUrl = null
+    pendingStudentPhoto = null
+    if (studentPhotoInput) studentPhotoInput.value = ''
+    const existing = data.classmates.find (student => student.id === studentIdInput?.value)
+    removeStudentPhoto = Boolean (existing?.photoPath || existing?.photoSource)
+    setStudentPhotoPreview ()
+    studentPhotoRemove.hidden = true
+  })
   studentForm?.addEventListener ('submit', event => { void (async () => {
     event.preventDefault ()
     if (!studentNameInput || !studentMonthInput || !studentDayInput || !studentIdInput) return
@@ -897,25 +1187,54 @@ function wireEvents (): void {
       announce (duplicate ? '名单里已经有这个名字了。' : '请填写同学姓名。')
       return
     }
-    const monthDay = `${month}-${day}`
-    if (supabase) {
-      const result = id
-        ? await supabase.from ('classmates').update ({ name, month_day: monthDay }).eq ('id', id)
-        : await supabase.from ('classmates').insert ({ name, month_day: monthDay })
-      if (result.error) {
-        announce (result.error.code === '23505' ? '生日簿中已有相同的同学记录。' : '保存失败，请确认管理员账号仍有权限。')
-        return
-      }
-      await refreshCloudState ()
-      announce (id ? `已更新 ${name} 的生日。` : `已把 ${name} 加入生日簿。`)
-    } else if (id) {
-      data.classmates = data.classmates.map (student => student.id === id ? { ...student, name, monthDay } : student)
-      announce (`已更新 ${name} 的生日。`)
-    } else {
-      data.classmates.push ({ id: globalThis.crypto?.randomUUID?.() ?? `m-${Date.now ()}`, name, monthDay })
-      announce (`已把 ${name} 加入生日簿。`)
+    if (supabase && (pendingStudentPhoto || removeStudentPhoto) && !photoSchemaReady) {
+      announce ('先在 Supabase 运行数据库升级 SQL，再保存寿星照片。管理员窗口里有 SQL 链接。')
+      return
     }
-    if (!supabase) persist ()
+    const monthDay = `${month}-${day}`
+    const existingStudent = data.classmates.find (student => student.id === id)
+    const saveButton = $<HTMLButtonElement>('#student-save')
+    if (saveButton) saveButton.disabled = true
+    if (supabase) {
+      try {
+        const result = id
+          ? await supabase.from ('classmates').update ({ name, month_day: monthDay }).eq ('id', id).select ('id').single ()
+          : await supabase.from ('classmates').insert ({ name, month_day: monthDay }).select ('id').single ()
+        if (result.error || !result.data?.id) {
+          announce (result.error?.code === '23505' ? '生日簿中已有相同的同学记录。' : '保存失败，请确认管理员账号仍有权限。')
+          return
+        }
+        await saveCloudStudentPhoto (result.data.id, existingStudent?.photoPath)
+        await refreshCloudState ()
+        announce (pendingStudentPhoto ? `已保存 ${name} 的生日和照片。` : id ? `已更新 ${name} 的生日。` : `已把 ${name} 加入生日簿。`)
+      } catch (error) {
+        await refreshCloudState ()
+        announce (error instanceof Error && error.message === '管理员登录已失效，请重新登录。'
+          ? error.message
+          : '生日资料已保存，但照片未能上传。请检查数据库升级和管理员权限后重试。')
+        return
+      } finally {
+        if (saveButton) saveButton.disabled = false
+      }
+    } else {
+      try {
+        let photoSource = removeStudentPhoto ? undefined : existingStudent?.photoSource
+        if (pendingStudentPhoto) photoSource = await readImageDataUrl (await compressStudentPhoto (pendingStudentPhoto))
+        if (id) {
+          data.classmates = data.classmates.map (student => student.id === id ? { ...student, name, monthDay, photoSource } : student)
+          announce (pendingStudentPhoto ? `已更新 ${name} 的生日和照片。` : `已更新 ${name} 的生日。`)
+        } else {
+          data.classmates.push ({ id: globalThis.crypto?.randomUUID?.() ?? `m-${Date.now ()}`, name, monthDay, photoSource })
+          announce (pendingStudentPhoto ? `已把 ${name} 和照片加入生日簿。` : `已把 ${name} 加入生日簿。`)
+        }
+        persist ()
+      } catch {
+        announce ('照片读取失败，请换一张 JPG、PNG 或 WebP 图片后重试。')
+        return
+      } finally {
+        if (saveButton) saveButton.disabled = false
+      }
+    }
     resetStudentForm ()
     renderAll ()
     renderRoster ()
@@ -929,14 +1248,14 @@ function wireEvents (): void {
       return
     }
     data.demoDate = date
-    selectedMonth = calendarMonthForDate (date)
+    resetTimelineFromDate (date)
     persist ()
     renderAll ()
     announce (`演示日期已切换到 ${localDate (date).toLocaleDateString ('zh-CN', { month: 'long', day: 'numeric' })}。`)
   })
   $('#reset-demo-date')?.addEventListener ('click', () => {
     data.demoDate = null
-    selectedMonth = calendarMonthForDate (getLocalDateISO ())
+    resetTimelineFromDate (getLocalDateISO ())
     if (demoDateInput) demoDateInput.value = getLocalDateISO ()
     persist ()
     renderAll ()
