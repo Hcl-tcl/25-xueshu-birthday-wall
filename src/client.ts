@@ -765,7 +765,7 @@ function renderAll (): void {
   renderWishes ()
   populateWishYears ()
   const wishesPeriod = $<HTMLElement>('#wishes-period')
-  if (wishesPeriod) wishesPeriod.textContent = `${selectedYear}年${selectedMonth}月的生日祝福；未升级前的旧祝福会单独列出。`
+  if (wishesPeriod) wishesPeriod.textContent = `${selectedYear}年${selectedMonth}月的生日祝福`
 }
 
 function updateDayOptions (month: number, selectedDay?: number): void {
