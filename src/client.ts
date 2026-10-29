@@ -547,7 +547,7 @@ function renderToday (): void {
   todayContent.append (banner)
 
   const cards = el ('div', 'today-cards')
-  for (const item of upcoming.slice (0, 3)) {
+  for (const item of upcoming.slice (0, 6)) {
     cards.append (makeTodayCard (item.student, false, item.days, item.date.getFullYear ()))
   }
   todayContent.append (cards)
@@ -675,10 +675,7 @@ function renderWishes (): void {
   if (!wishesGrid || !emptyWishes) return
   const filterId = wishFilter?.value ?? 'all'
   const filtered = [...data.wishes]
-    .filter (wish => {
-      const recipient = data.classmates.find (student => student.id === wish.recipientId)
-      return wish.birthdayYear === selectedYear && Number (recipient?.monthDay.slice (0, 2)) === selectedMonth && (filterId === 'all' || wish.recipientId === filterId)
-    })
+    .filter (wish => wish.birthdayYear === selectedYear && (filterId === 'all' || wish.recipientId === filterId))
     .sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
   wishesGrid.replaceChildren ()
   renderWishCards (wishesGrid, filtered.slice (0, 12))
@@ -687,7 +684,7 @@ function renderWishes (): void {
   const legacySection = $<HTMLElement>('#legacy-wishes')
   const legacy = data.wishes.filter (wish => {
     const recipient = data.classmates.find (student => student.id === wish.recipientId)
-    return !wish.birthdayYear && Number (recipient?.monthDay.slice (0, 2)) === selectedMonth && (filterId === 'all' || wish.recipientId === filterId)
+    return !wish.birthdayYear && (filterId === 'all' || wish.recipientId === filterId)
   }).sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
   if (legacyGrid && legacySection) {
     legacyGrid.replaceChildren ()
@@ -1046,6 +1043,8 @@ function wireEvents (): void {
   wishForm?.addEventListener ('submit', event => { void (async () => {
     event.preventDefault ()
     if (!recipientSelect || !messageInput || !nicknameInput) return
+    const submitButton = wishForm.querySelector<HTMLButtonElement>('[type="submit"]')
+    if (submitButton?.disabled) return
     const student = data.classmates.find (item => item.id === recipientSelect.value)
     const message = messageInput.value.trim ()
     if (!student || !message) {
@@ -1056,6 +1055,12 @@ function wireEvents (): void {
     const anonymous = !nickname
     const senderName = nickname || '匿名同学'
     let savedToYearArchive = true
+    if (submitButton) {
+      submitButton.disabled = true
+      submitButton.textContent = '正在送出…'
+    }
+    if (formStatus) formStatus.textContent = '正在送出生日卡…'
+    try {
     if (supabase) {
       const payload = {
         recipient_id: student.id,
@@ -1074,9 +1079,13 @@ function wireEvents (): void {
       }
       if (error) {
         if (formStatus) formStatus.textContent = '祝福暂时没有送出，请稍后重试。'
+        announce ('祝福没有送出，请检查网络后重试。')
         return
       }
-      await refreshCloudState ()
+      const refreshed = await refreshCloudState ()
+      if (!refreshed && !data.wishes.some (wish => wish.recipientId === student.id && wish.message === message && wish.senderName === senderName)) {
+        data.wishes.unshift ({ id: globalThis.crypto?.randomUUID?.() ?? `w-${Date.now ()}`, recipientId: student.id, senderName, message, anonymous, createdAt: new Date ().toISOString (), tone: tones[data.wishes.length % tones.length], birthdayYear: pendingBirthdayYear })
+      }
     } else {
       const wish: BirthdayWish = {
         id: globalThis.crypto?.randomUUID?.() ?? `w-${Date.now ()}`,
@@ -1100,6 +1109,16 @@ function wireEvents (): void {
     messageInput.value = ''
     if (charCount) charCount.textContent = '0'
     celebrate ()
+    announce (`已成功送出给 ${student.name} 的生日祝福！`)
+    } catch (error) {
+      if (formStatus) formStatus.textContent = '发送结果暂时无法确认，请刷新祝福墙查看后再重试。'
+      announce ('发送结果暂时无法确认，请先刷新页面核对，避免重复发送。')
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false
+        submitButton.innerHTML = '送出这张生日卡 <span aria-hidden="true">↗</span>'
+      }
+    }
   })() })
 
   $('#admin-open')?.addEventListener ('click', openAdmin)
