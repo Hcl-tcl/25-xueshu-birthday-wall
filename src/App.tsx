@@ -1,5 +1,5 @@
 import { getLocalDateISO } from './data'
-import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, Gift, PartyPopper, PenLine, Settings2, Sparkles, WandSparkles, X, Plus } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, Copy, Gift, PartyPopper, PenLine, Settings2, Sparkles, WandSparkles, X, Plus } from 'lucide-react'
 
 const currentDate = getLocalDateISO ()
 const currentMonth = Number(currentDate.slice (5, 7))
@@ -80,6 +80,11 @@ export function App () {
               return <button className={`month-tab${month === currentMonth ? ' is-active' : ''}`} type='button' data-month-tab={month} aria-selected={month === currentMonth} role='tab' key={month}><span>{month}月</span><span className='month-count' data-month-count={month}>0</span></button>
             })}
           </div>
+          <div className='month-preview-note' id='month-preview-note' hidden>
+            <span className='preview-seal' aria-hidden='true'>✦</span>
+            <div className='preview-copy'><strong id='month-preview-title'></strong><span id='month-preview-description'></span></div>
+            <button className='copy-month-list' id='copy-month-list' type='button'><Copy size={14} aria-hidden='true' />复制寿星清单</button>
+          </div>
           <div className='calendar-caption'><strong><span data-month-label='number'>{currentMonth}</span>月生日的同学</strong><span id='month-birthday-count'>0 位寿星</span></div>
           <div className='classmate-grid' id='classmate-grid' aria-live='polite'></div>
           <div className='empty-state' id='month-empty' hidden><span className='empty-mark' aria-hidden='true'>✳</span><strong>这个月暂时没有生日</strong><span>换个月份看看，或者请管理员补充生日。</span></div>
@@ -108,8 +113,8 @@ export function App () {
             <div className='write-panel-heading'><span className='write-icon' aria-hidden='true'><PenLine size={15} /></span><strong>写一张生日卡片</strong></div>
             <label className='field-label' htmlFor='recipient'>送给谁 <span>必选</span></label>
             <select className='text-input' id='recipient' name='recipient' required><option value=''>先选一位同学</option></select>
-            <label className='field-label' htmlFor='nickname'>你的称呼 <span>选填</span></label>
-            <input className='text-input' id='nickname' name='nickname' maxLength={18} placeholder='留下你的昵称' autoComplete='nickname' />
+            <label className='field-label' htmlFor='nickname'>你的称呼 <span>选填，留空匿名</span></label>
+            <input className='text-input' id='nickname' name='nickname' maxLength={18} placeholder='留下昵称署名，或留空匿名送出' autoComplete='nickname' />
             <label className='field-label message-label' htmlFor='message'>祝福内容 <span>必填</span></label>
             <div className='message-tools' aria-label='添加祝福点子'>
               <button type='button' className='phrase-button' data-phrase='愿你每天都开开心心！'>天天开心 <Sparkles size={11} aria-hidden='true' /></button>
@@ -118,10 +123,6 @@ export function App () {
             </div>
             <textarea id='message' name='message' maxLength={140} required placeholder='写下专属 TA 的生日祝福…'></textarea>
             <div className='form-footnote'><span>最多 140 字</span><span><b id='char-count'>0</b> / 140</span></div>
-            <label className='anonymous-option' htmlFor='anonymous'>
-              <input id='anonymous' name='anonymous' type='checkbox' />
-              <span className='custom-check' aria-hidden='true'></span><span>匿名送出</span>
-            </label>
             <button className='submit-button' type='submit'>送出这张生日卡 <ArrowUpRight size={16} aria-hidden='true' /></button>
             <p className='form-status' id='form-status' role='status' aria-live='polite'></p>
             <div className='privacy-note'><span aria-hidden='true'>✳</span> 只展示你愿意分享的内容</div>

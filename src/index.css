@@ -142,6 +142,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .month-tab.is-active { color: #fff; background: var(--coral); font-weight: 700; }
 .month-count { min-width: 17px; height: 17px; display: none; place-items: center; border-radius: 50%; color: #914630; background: #ffd9c9; font-size: 9px; }
 .month-tab.is-active .month-count { display: grid; }
+.month-preview-note { display: flex; align-items: center; gap: 11px; margin-top: 13px; padding: 11px 13px; border: 1px solid #dce8dc; border-radius: 7px; background: #edf4ed; }
+.preview-seal { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; color: #95643d; background: #f8e7c9; font-size: 16px; }
+.preview-copy { min-width: 0; display: grid; gap: 3px; }
+.preview-copy strong { color: #345342; font-size: 11px; font-weight: 700; }
+.preview-copy span { color: #708076; font-size: 10px; line-height: 1.5; }
+.copy-month-list { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: none; margin-left: auto; padding: 0 10px; border: 1px solid #d2dfd3; border-radius: 5px; color: #385b47; background: #fff; cursor: pointer; font-size: 10px; font-weight: 600; }
+.copy-month-list:hover { background: #f8fbf8; }
 .calendar-caption { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 18px 1px 12px; }
 .calendar-caption strong { color: #3a493f; font-size: 13px; font-weight: 600; }
 .calendar-caption > span { color: #8b968e; font-size: 10px; }
@@ -200,12 +207,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .phrase-button:hover { border-color: #c9dccd; color: var(--forest); background: #edf4ee; }
 textarea { min-height: 102px; resize: vertical; padding: 10px 11px; line-height: 1.75; }
 .form-footnote { display: flex; justify-content: space-between; margin-top: 5px; color: #9da79f; font-size: 9px; }
-.anonymous-option { display: inline-flex; align-items: center; gap: 7px; margin-top: 13px; color: #647168; cursor: pointer; font-size: 10px; }
-.anonymous-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.custom-check { width: 15px; height: 15px; display: grid; place-items: center; border: 1px solid #cbd4cc; border-radius: 3px; background: #fff; }
-.anonymous-option input:checked + .custom-check { border-color: var(--forest); background: var(--forest); }
-.anonymous-option input:checked + .custom-check::after { content: '✓'; color: #fff; font-size: 11px; line-height: 1; }
-.anonymous-option input:focus-visible + .custom-check { outline: 3px solid #efb38b; outline-offset: 3px; }
 .submit-button { width: 100%; min-height: 42px; display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 0 13px; border: 0; border-radius: 5px; color: #fff; background: var(--forest); cursor: pointer; font-size: 11px; font-weight: 600; }
 .submit-button:hover { background: var(--forest-dark); }
 .submit-button:disabled { opacity: .65; cursor: wait; }
@@ -328,6 +329,9 @@ textarea { min-height: 102px; resize: vertical; padding: 10px 11px; line-height:
   .month-hint { max-width: 137px; padding-top: 13px; text-align: right; font-size: 9px; line-height: 1.5; }
   .month-tabs { gap: 6px; margin-top: 13px; padding-right: 36px; }
   .month-tab { flex-basis: 57px; height: 41px; font-size: 11px; }
+  .month-preview-note { display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: start; gap: 7px 10px; padding: 10px; }
+  .preview-seal { grid-row: span 2; }
+  .copy-month-list { grid-column: 2; justify-self: start; margin-left: 0; }
   .calendar-caption { margin-top: 14px; }
   .classmate-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .classmate-card { min-height: 155px; padding: 12px; }

@@ -83,7 +83,7 @@ if (supabase) data = { ...data, classmates: [], wishes: [], heroContent: { ...de
 let cloudHeroImagePath: string | null = null
 let pendingHeroFile: File | null = null
 let pendingHeroPreviewUrl: string | null = null
-let selectedMonth = Number((data.demoDate ?? getLocalDateISO ()).slice (5, 7))
+let selectedMonth = calendarMonthForDate (data.demoDate ?? getLocalDateISO ())
 let adminSignedIn = false
 let toastTimer = 0
 let arrivalTimer = 0
@@ -99,7 +99,6 @@ const wishFilter = $<HTMLSelectElement>('#wish-filter')
 const wishForm = $<HTMLFormElement>('#wish-form')
 const messageInput = $<HTMLTextAreaElement>('#message')
 const nicknameInput = $<HTMLInputElement>('#nickname')
-const anonymousInput = $<HTMLInputElement>('#anonymous')
 const charCount = $<HTMLElement>('#char-count')
 const formStatus = $<HTMLElement>('#form-status')
 const homeArrival = $<HTMLElement>('#home-arrival')
@@ -345,6 +344,16 @@ function currentDate (): string {
   return data.demoDate ?? getLocalDateISO ()
 }
 
+function calendarMonthForDate (dateISO: string): number {
+  const date = localDate (dateISO)
+  const lastDay = new Date (date.getFullYear (), date.getMonth () + 1, 0).getDate ()
+  return date.getDate () === lastDay ? date.getMonth () === 11 ? 1 : date.getMonth () + 2 : date.getMonth () + 1
+}
+
+function isMonthPreview (dateISO: string, month: number): boolean {
+  return calendarMonthForDate (dateISO) !== Number(dateISO.slice (5, 7)) && calendarMonthForDate (dateISO) === month
+}
+
 function formatMonthDay (monthDay: string): string {
   const [month, day] = monthDay.split ('-').map (Number)
   return `${month}月${String (day).padStart (2, '0')}日`
@@ -465,6 +474,15 @@ function makeTodayCard (student: Classmate, birthdayToday: boolean, days: number
 function renderMonth (): void {
   if (!classmateGrid || !monthEmpty) return
   const students = classmatesForMonth (selectedMonth)
+  const previewNote = $<HTMLElement>('#month-preview-note')
+  const previewTitle = $<HTMLElement>('#month-preview-title')
+  const previewDescription = $<HTMLElement>('#month-preview-description')
+  const previewingNextMonth = isMonthPreview (currentDate (), selectedMonth)
+  if (previewNote) previewNote.hidden = !previewingNextMonth
+  if (previewTitle) previewTitle.textContent = `${selectedMonth}月生日墙提前开门啦`
+  if (previewDescription) previewDescription.textContent = students.length
+    ? `本月有 ${students.length} 位寿星，大家现在就可以提前送上祝福。`
+    : '这个月暂时还没有生日名单，管理员补充后会显示在这里。'
   const label = $<HTMLElement>('[data-month-label="number"]')
   if (label) label.textContent = String (selectedMonth)
   const count = $<HTMLElement>('#month-birthday-count')
@@ -551,14 +569,12 @@ function centerSelectedMonth (): void {
 
 function renderAll (): void {
   renderHeroContent ()
-  const selected = $<HTMLElement>('.month-tab.is-active')
-  if (selected) selected.classList.remove ('is-active')
-  const activeTab = $<HTMLButtonElement>(`[data-month-tab="${selectedMonth}"]`)
-  if (activeTab) {
-    activeTab.classList.add ('is-active')
-    activeTab.setAttribute ('aria-selected', 'true')
-    window.requestAnimationFrame (centerSelectedMonth)
-  }
+  document.querySelectorAll<HTMLButtonElement>('.month-tab').forEach (tab => {
+    const active = Number(tab.dataset.monthTab) === selectedMonth
+    tab.classList.toggle ('is-active', active)
+    tab.setAttribute ('aria-selected', String(active))
+  })
+  window.requestAnimationFrame (centerSelectedMonth)
   const count = $<HTMLElement>('#classmate-total')
   if (count) count.textContent = String (data.classmates.length)
   const wishesCount = $<HTMLElement>('#wish-total')
@@ -736,11 +752,6 @@ function wireEvents (): void {
     if (charCount) charCount.textContent = String (messageInput.value.length)
     if (formStatus) formStatus.textContent = ''
   })
-  anonymousInput?.addEventListener ('change', () => {
-    if (!nicknameInput) return
-    nicknameInput.disabled = anonymousInput.checked
-    if (anonymousInput.checked) nicknameInput.value = ''
-  })
   document.querySelectorAll<HTMLButtonElement>('[data-phrase]').forEach (button => {
     button.addEventListener ('click', () => {
       if (!messageInput) return
@@ -757,17 +768,49 @@ function wireEvents (): void {
     messageInput.focus ()
   })
 
+  $('#copy-month-list')?.addEventListener ('click', () => { void (async () => {
+    const students = classmatesForMonth (selectedMonth)
+    const grouped = new Map<string, string[]> ()
+    for (const student of students) {
+      const day = student.monthDay.slice (3)
+      grouped.set (day, [...(grouped.get (day) ?? []), student.name])
+    }
+    const lines = [...grouped.entries ()]
+      .sort(([a], [b]) => a.localeCompare (b))
+      .map(([day, names]) => `${Number(day)}日：${names.join ('、')}`)
+    const text = [`${selectedMonth}月生日墙提前开门啦 🎂`, ...lines, '', `来这里送祝福：${window.location.href.split ('#')[0]}`].join ('\n')
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText (text)
+      } else {
+        const field = el ('textarea')
+        field.value = text
+        field.style.position = 'fixed'
+        field.style.opacity = '0'
+        document.body.append (field)
+        field.select ()
+        const copied = document.execCommand ('copy')
+        field.remove ()
+        if (!copied) throw new Error ('Clipboard unavailable')
+      }
+      announce ('寿星清单已复制，可以发到班级群啦。')
+    } catch {
+      announce ('复制失败，请稍后再试。')
+    }
+  })() })
+
   wishForm?.addEventListener ('submit', event => { void (async () => {
     event.preventDefault ()
-    if (!recipientSelect || !messageInput || !nicknameInput || !anonymousInput) return
+    if (!recipientSelect || !messageInput || !nicknameInput) return
     const student = data.classmates.find (item => item.id === recipientSelect.value)
     const message = messageInput.value.trim ()
     if (!student || !message) {
       if (formStatus) formStatus.textContent = '先选择一位寿星，再写下祝福内容。'
       return
     }
-    const anonymous = anonymousInput.checked
-    const senderName = anonymous ? '匿名同学' : nicknameInput.value.trim () || '同学'
+    const nickname = nicknameInput.value.trim ()
+    const anonymous = !nickname
+    const senderName = nickname || '匿名同学'
     if (supabase) {
       const { error } = await supabase.from ('wishes').insert ({
         recipient_id: student.id,
@@ -799,10 +842,6 @@ function wireEvents (): void {
     if (formStatus) formStatus.textContent = `送给 ${student.name} 的生日卡已经放进祝福墙。`
     messageInput.value = ''
     if (charCount) charCount.textContent = '0'
-    if (anonymousInput.checked) {
-      anonymousInput.checked = false
-      nicknameInput.disabled = false
-    }
     celebrate ()
   })() })
 
@@ -890,14 +929,14 @@ function wireEvents (): void {
       return
     }
     data.demoDate = date
-    selectedMonth = Number (date.slice (5, 7))
+    selectedMonth = calendarMonthForDate (date)
     persist ()
     renderAll ()
     announce (`演示日期已切换到 ${localDate (date).toLocaleDateString ('zh-CN', { month: 'long', day: 'numeric' })}。`)
   })
   $('#reset-demo-date')?.addEventListener ('click', () => {
     data.demoDate = null
-    selectedMonth = Number(getLocalDateISO ().slice (5, 7))
+    selectedMonth = calendarMonthForDate (getLocalDateISO ())
     if (demoDateInput) demoDateInput.value = getLocalDateISO ()
     persist ()
     renderAll ()
