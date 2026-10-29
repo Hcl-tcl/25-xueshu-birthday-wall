@@ -135,6 +135,13 @@ grant select on public.classmates, public.wishes to anon, authenticated;
 grant insert on public.wishes to anon, authenticated;
 grant insert, update, delete on public.classmates to authenticated;
 grant delete on public.wishes to authenticated;
+grant update (sender_name, message, birthday_year) on public.wishes to authenticated;
+
+drop policy if exists "Class admins can edit wishes" on public.wishes;
+create policy "Class admins can edit wishes"
+  on public.wishes for update to authenticated
+  using (public.is_class_admin ())
+  with check (public.is_class_admin ());
 
 drop policy if exists "Anyone can read site settings" on public.site_settings;
 create policy "Anyone can read site settings"

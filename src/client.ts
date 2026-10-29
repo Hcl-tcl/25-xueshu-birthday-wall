@@ -97,6 +97,9 @@ let removeStudentPhoto = false
 let pendingBirthdayYear = selectedYear
 let toastTimer = 0
 let arrivalTimer = 0
+let visibleWishes = 18
+let visibleLegacyWishes = 12
+const selectedAdminWishes = new Set<string>()
 
 const $ = <T extends HTMLElement> (selector: string): T | null => document.querySelector<T> (selector)
 const classmateGrid = $<HTMLElement>('#classmate-grid')
@@ -129,6 +132,11 @@ const wishAdminStudent = $<HTMLSelectElement>('#wish-admin-student')
 const wishAdminSearch = $<HTMLInputElement>('#wish-admin-search')
 const wishAdminCount = $<HTMLElement>('#wish-admin-count')
 const wishAdminEmpty = $<HTMLElement>('#wish-admin-empty')
+const wishAdminSelectAll = $<HTMLInputElement>('#wish-admin-select-all')
+const wishAdminDeleteSelected = $<HTMLButtonElement>('#wish-admin-delete-selected')
+const cloudStatus = $<HTMLElement>('#cloud-status')
+const cloudStatusCopy = $<HTMLElement>('#cloud-status-copy')
+const cloudRetry = $<HTMLButtonElement>('#cloud-retry')
 const studentForm = $<HTMLFormElement>('#student-form')
 const studentIdInput = $<HTMLInputElement>('#student-id')
 const studentNameInput = $<HTMLInputElement>('#student-name')
@@ -302,7 +310,8 @@ async function refreshCloudState (): Promise<boolean> {
     birthdayYearSchemaReady = false
   }
   if (classmatesError || wishesError || settingsResult.error) {
-    announce ('共享生日簿暂时无法读取，请检查 Supabase 配置和数据库权限。')
+    announce ('共享生日簿暂时无法读取，请检查网络后重试。')
+    setCloudStatus ('error', '生日数据暂时无法加载，请检查网络后重试。')
     return false
   }
   data.classmates = classmatesData.map (student => ({
@@ -333,6 +342,7 @@ async function refreshCloudState (): Promise<boolean> {
   renderAll ()
   if (adminSignedIn) renderRoster ()
   updateSchemaNotice ()
+  setCloudStatus ('ready', '生日簿已更新')
   return true
 }
 
@@ -344,6 +354,7 @@ async function isCurrentUserAdmin (): Promise<boolean> {
 
 async function initializeCloud (): Promise<void> {
   if (!supabase) return
+  setCloudStatus ('loading', '正在连接共享生日簿…')
   await refreshCloudState ()
   const { data: { session } } = await supabase.auth.getSession ()
   if (session && await isCurrentUserAdmin ()) {
@@ -366,6 +377,14 @@ async function initializeCloud (): Promise<void> {
       if (adminTools) adminTools.hidden = true
     }
   })
+}
+
+function setCloudStatus (state: 'loading' | 'ready' | 'error', message: string): void {
+  if (!cloudStatus || !cloudStatusCopy) return
+  cloudStatus.hidden = state === 'ready'
+  cloudStatus.dataset.state = state
+  cloudStatusCopy.textContent = message
+  if (cloudRetry) cloudRetry.hidden = state !== 'error'
 }
 
 function announce (message: string): void {
@@ -683,7 +702,12 @@ function renderWishes (): void {
     .filter (wish => wish.birthdayYear === selectedYear && (filterId === 'all' || wish.recipientId === filterId))
     .sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
   wishesGrid.replaceChildren ()
-  renderWishCards (wishesGrid, filtered.slice (0, 12))
+  renderWishCards (wishesGrid, filtered.slice (0, visibleWishes))
+  const moreButton = $<HTMLButtonElement>('#wishes-more')
+  if (moreButton) {
+    moreButton.hidden = filtered.length <= visibleWishes
+    moreButton.textContent = `加载更多祝福（还剩 ${filtered.length - visibleWishes} 条）`
+  }
   emptyWishes.hidden = filtered.length > 0
   const legacyGrid = $<HTMLElement>('#legacy-wishes-grid')
   const legacySection = $<HTMLElement>('#legacy-wishes')
@@ -693,7 +717,12 @@ function renderWishes (): void {
   }).sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
   if (legacyGrid && legacySection) {
     legacyGrid.replaceChildren ()
-    renderWishCards (legacyGrid, legacy.slice (0, 6))
+    renderWishCards (legacyGrid, legacy.slice (0, visibleLegacyWishes))
+    const moreLegacy = $<HTMLButtonElement>('#legacy-wishes-more')
+    if (moreLegacy) {
+      moreLegacy.hidden = legacy.length <= visibleLegacyWishes
+      moreLegacy.textContent = `加载更多早期祝福（还剩 ${legacy.length - visibleLegacyWishes} 条）`
+    }
     legacySection.hidden = legacy.length === 0
   }
   emptyWishes.hidden = filtered.length > 0 || legacy.length > 0
@@ -843,33 +872,138 @@ function renderRoster (): void {
   renderWishAdmin ()
 }
 
+function getFilteredAdminWishes (): BirthdayWish[] {
+  const selected = wishAdminStudent?.value || 'all'
+  const query = wishAdminSearch?.value.trim ().toLowerCase () ?? ''
+  return data.wishes.filter (wish => {
+    const recipient = data.classmates.find (student => student.id === wish.recipientId)
+    const text = `${recipient?.name ?? ''} ${wish.senderName} ${wish.message}`.toLowerCase ()
+    return (selected === 'all' || wish.recipientId === selected) && (!query || text.includes (query))
+  }).sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
+}
+
 function renderWishAdmin (): void {
   if (!wishAdminList || !wishAdminStudent) return
   const current = wishAdminStudent.value || 'all'
   wishAdminStudent.replaceChildren (new Option ('全班寿星', 'all'))
   for (const student of [...data.classmates].sort ((a, b) => a.name.localeCompare (b.name, 'zh-CN'))) wishAdminStudent.add (new Option (student.name, student.id))
   wishAdminStudent.value = [...wishAdminStudent.options].some (option => option.value === current) ? current : 'all'
-  const selected = wishAdminStudent.value
-  const query = wishAdminSearch?.value.trim ().toLowerCase () ?? ''
-  const wishes = data.wishes.filter (wish => {
-    const recipient = data.classmates.find (student => student.id === wish.recipientId)
-    const text = `${recipient?.name ?? ''} ${wish.senderName} ${wish.message}`.toLowerCase ()
-    return (selected === 'all' || wish.recipientId === selected) && (!query || text.includes (query))
-  }).sort ((a, b) => b.createdAt.localeCompare (a.createdAt))
+  const wishes = getFilteredAdminWishes ()
   if (wishAdminCount) wishAdminCount.textContent = `${wishes.length} 份祝福`
   wishAdminList.replaceChildren ()
   for (const wish of wishes) {
     const recipient = data.classmates.find (student => student.id === wish.recipientId)
     const row = el ('div', 'wish-admin-row')
+    const select = el ('input')
+    select.type = 'checkbox'
+    select.checked = selectedAdminWishes.has (wish.id)
+    select.setAttribute ('aria-label', `选择给${recipient?.name ?? '未知同学'}的祝福`)
+    select.addEventListener ('change', () => {
+      if (select.checked) selectedAdminWishes.add (wish.id)
+      else selectedAdminWishes.delete (wish.id)
+      renderWishAdmin ()
+    })
     const copy = el ('div', 'wish-admin-copy')
     copy.append (el ('strong', '', `${recipient?.name ?? '未知同学'} · ${wish.birthdayYear ? `${wish.birthdayYear}年` : '年份未记录'}`), el ('p', '', wish.message), el ('span', '', `${wish.anonymous ? '匿名同学' : wish.senderName} · ${new Date (wish.createdAt).toLocaleDateString ('zh-CN')}`))
+    const actions = el ('div', 'wish-admin-actions')
+    const edit = el ('button', 'row-icon-button', '编辑')
+    edit.type = 'button'
+    edit.addEventListener ('click', () => showWishEditor (row, wish))
     const remove = el ('button', 'row-delete-button', '删除')
     remove.type = 'button'
     remove.addEventListener ('click', () => { void deleteWishAsAdmin (wish.id) })
-    row.append (copy, remove)
+    actions.append (edit, remove)
+    row.append (select, copy, actions)
     wishAdminList.append (row)
   }
+  const selectedVisible = wishes.filter (wish => selectedAdminWishes.has (wish.id)).length
+  if (wishAdminSelectAll) {
+    wishAdminSelectAll.checked = wishes.length > 0 && selectedVisible === wishes.length
+    wishAdminSelectAll.indeterminate = selectedVisible > 0 && selectedVisible < wishes.length
+  }
+  if (wishAdminDeleteSelected) {
+    wishAdminDeleteSelected.disabled = selectedVisible === 0
+    wishAdminDeleteSelected.textContent = selectedVisible ? `批量删除所选（${selectedVisible}）` : '批量删除所选'
+  }
   if (wishAdminEmpty) wishAdminEmpty.hidden = wishes.length > 0
+}
+
+function showWishEditor (row: HTMLElement, wish: BirthdayWish): void {
+  const form = el ('form', 'wish-editor')
+  const messageLabel = el ('label', 'wish-editor-field')
+  messageLabel.append (el ('span', '', '祝福内容'))
+  const message = el ('textarea', 'text-input')
+  message.value = wish.message
+  message.maxLength = 140
+  message.required = true
+  messageLabel.append (message)
+  const senderLabel = el ('label', 'wish-editor-field')
+  senderLabel.append (el ('span', '', '署名（匿名祝福不会展示）'))
+  const sender = el ('input', 'text-input')
+  sender.value = wish.senderName
+  sender.maxLength = 18
+  sender.required = true
+  senderLabel.append (sender)
+  const yearLabel = el ('label', 'wish-editor-field')
+  yearLabel.append (el ('span', '', '生日年份'))
+  const year = el ('select', 'text-input')
+  year.add (new Option ('尚未归档', ''))
+  const years = new Set ([selectedYear - 1, selectedYear, selectedYear + 1])
+  if (wish.birthdayYear) years.add (wish.birthdayYear)
+  for (const value of [...years].sort ((left, right) => left - right)) year.add (new Option (`${value} 年生日`, String (value)))
+  year.value = wish.birthdayYear ? String (wish.birthdayYear) : ''
+  yearLabel.append (year)
+  const actions = el ('div', 'wish-editor-actions')
+  const save = el ('button', 'apply-date', '保存修改')
+  save.type = 'submit'
+  const cancel = el ('button', 'cancel-edit', '取消')
+  cancel.type = 'button'
+  cancel.addEventListener ('click', renderWishAdmin)
+  actions.append (save, cancel)
+  form.append (messageLabel, senderLabel, yearLabel, actions)
+  form.addEventListener ('submit', event => {
+    event.preventDefault ()
+    void saveWishEdit (wish, message.value.trim (), sender.value.trim (), year.value, save)
+  })
+  row.replaceChildren (form)
+  message.focus ()
+}
+
+async function saveWishEdit (wish: BirthdayWish, message: string, senderName: string, year: string, button: HTMLButtonElement): Promise<void> {
+  if (!message || message.length > 140) { announce ('祝福内容需为 1 到 140 个字。'); return }
+  if (!senderName || senderName.length > 18) { announce ('署名需为 1 到 18 个字。'); return }
+  const birthdayYear = year ? Number (year) : null
+  button.disabled = true
+  button.textContent = '正在保存…'
+  if (supabase) {
+    const { error } = await supabase.from ('wishes').update ({ message, sender_name: senderName, birthday_year: birthdayYear }).eq ('id', wish.id)
+    if (error) { button.disabled = false; button.textContent = '保存修改'; announce ('修改失败，请先在 Supabase 运行管理员权限升级脚本。'); return }
+    if (!await refreshCloudState ()) return
+  } else {
+    data.wishes = data.wishes.map (item => item.id === wish.id ? { ...item, message, senderName, birthdayYear: birthdayYear ?? undefined } : item)
+    persist ()
+    renderAll ()
+  }
+  announce ('祝福修改成功。')
+}
+
+async function deleteSelectedWishesAsAdmin (): Promise<void> {
+  const wishes = getFilteredAdminWishes ().filter (wish => selectedAdminWishes.has (wish.id))
+  if (wishes.length === 0 || !window.confirm (`确定批量删除选中的 ${wishes.length} 份祝福吗？删除后无法恢复。`)) return
+  const ids = wishes.map (wish => wish.id)
+  if (supabase) {
+    const { error } = await supabase.from ('wishes').delete ().in ('id', ids)
+    if (error) { announce ('批量删除失败，请确认管理员权限。'); return }
+    selectedAdminWishes.clear ()
+    await refreshCloudState ()
+  } else {
+    data.wishes = data.wishes.filter (wish => !selectedAdminWishes.has (wish.id))
+    selectedAdminWishes.clear ()
+    persist ()
+    renderAll ()
+    renderRoster ()
+  }
+  announce (`已删除 ${ids.length} 份祝福。`)
 }
 
 async function deleteWishAsAdmin (id: string): Promise<void> {
@@ -1210,8 +1344,18 @@ function wireEvents (): void {
     adminDialog?.close ()
     announce ('已退出管理员。')
   })
-  wishAdminStudent?.addEventListener ('change', renderWishAdmin)
-  wishAdminSearch?.addEventListener ('input', renderWishAdmin)
+  wishAdminStudent?.addEventListener ('change', () => { selectedAdminWishes.clear (); renderWishAdmin () })
+  wishAdminSearch?.addEventListener ('input', () => { selectedAdminWishes.clear (); renderWishAdmin () })
+  wishAdminSelectAll?.addEventListener ('change', () => {
+    const visibleIds = getFilteredAdminWishes ().map (wish => wish.id)
+    if (wishAdminSelectAll.checked) visibleIds.forEach (id => selectedAdminWishes.add (id))
+    else visibleIds.forEach (id => selectedAdminWishes.delete (id))
+    renderWishAdmin ()
+  })
+  wishAdminDeleteSelected?.addEventListener ('click', () => { void deleteSelectedWishesAsAdmin () })
+  $('#wishes-more')?.addEventListener ('click', () => { visibleWishes += 18; renderWishes () })
+  $('#legacy-wishes-more')?.addEventListener ('click', () => { visibleLegacyWishes += 12; renderWishes () })
+  cloudRetry?.addEventListener ('click', () => { setCloudStatus ('loading', '正在重新连接共享生日簿…'); void refreshCloudState () })
   studentMonthInput?.addEventListener ('change', () => updateDayOptions (Number(studentMonthInput.value)))
   studentPhotoInput?.addEventListener ('change', () => {
     if (pendingStudentPhotoUrl) URL.revokeObjectURL (pendingStudentPhotoUrl)

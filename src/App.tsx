@@ -98,7 +98,8 @@ export function App () {
           </div>
           <p className='wishes-period' id='wishes-period'>祝福按生日年份归档</p>
           <div className='wishes-grid' id='wishes-grid' aria-live='polite'></div>
-          <div className='legacy-wishes' id='legacy-wishes' hidden><strong>早期祝福 · 尚未归档年份</strong><div className='wishes-grid' id='legacy-wishes-grid'></div></div>
+          <button className='wishes-more' id='wishes-more' type='button' hidden>加载更多祝福</button>
+          <div className='legacy-wishes' id='legacy-wishes' hidden><strong>早期祝福 · 尚未归档年份</strong><div className='wishes-grid' id='legacy-wishes-grid'></div><button className='wishes-more' id='legacy-wishes-more' type='button' hidden>加载更多早期祝福</button></div>
           <div className='empty-wishes' id='empty-wishes' hidden>还没有收到祝福，选一位寿星送上第一张卡片吧。</div>
         </section>
 
@@ -187,6 +188,7 @@ export function App () {
               <label className='accessibly-hidden' htmlFor='wish-admin-student'>筛选寿星</label><select className='text-input' id='wish-admin-student'><option value='all'>全班寿星</option></select>
               <label className='accessibly-hidden' htmlFor='wish-admin-search'>搜索祝福</label><input className='text-input' id='wish-admin-search' type='search' placeholder='搜索祝福内容或署名' />
             </div>
+            <div className='wish-admin-bulk'><label><input id='wish-admin-select-all' type='checkbox' /> 选择当前结果</label><button className='row-delete-button' id='wish-admin-delete-selected' type='button' disabled>批量删除所选</button></div>
             <div className='wish-admin-list' id='wish-admin-list'></div>
             <p className='admin-error' id='wish-admin-empty' hidden>没有找到符合条件的祝福。</p>
           </section>

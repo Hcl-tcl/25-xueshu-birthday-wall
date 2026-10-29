@@ -13,7 +13,7 @@ npm run dev
 
 打开终端显示的本地地址（默认 `http://localhost:8080/`）。运行 `npm run typecheck` 执行 TypeScript 检查。
 
-管理员登录后可以编辑横幅内容、维护同学名单，并用“生日当天演示”切换本地预览日期。云端编辑保存在 Supabase，未配置 Supabase 时保存在当前浏览器。只有 `admin_emails` 白名单中的账号可以编辑名单和横幅。
+管理员登录后可以编辑横幅内容、维护同学名单，也可以搜索、修改和批量删除祝福，并用“生日当天演示”切换本地预览日期。只有 `admin_emails` 白名单中的账号可以使用管理功能。
 
 `npm run build` 会生成可部署的静态文件到 `public/`。云端构建需设置环境变量 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`；生产发布流程会要求两项配置齐全。
 
@@ -36,3 +36,5 @@ npm run dev
 界面图标使用 [lucide-icons/lucide](https://github.com/lucide-icons/lucide) 的 React 图标包，ISC License。
 
 生日蛋糕图片来自 [Unsplash 图片 CDN](https://images.unsplash.com/photo-1464349095431-e9a21285b5f3)。
+
+已有 Supabase 项目请在 SQL Editor 运行 [管理员祝福编辑升级脚本](./supabase/migrations/20261030_admin_wish_editing.sql)，启用云端祝福编辑。

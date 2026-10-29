@@ -401,3 +401,29 @@ textarea { min-height: 102px; resize: vertical; padding: 10px 11px; line-height:
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation: none !important; }
   .home-arrival { display: none !important; }
 }
+
+.cloud-status { min-height: 38px; display: flex; align-items: center; gap: 12px; margin: 0 auto 10px; padding: 8px 12px; border: 1px solid #dce8de; border-radius: 5px; color: #44624d; background: #edf5ee; font-size: 12px; }
+.cloud-status[hidden] { display: none; }
+.cloud-status[data-state='error'] { border-color: #efd7ce; color: #8e4e3f; background: #fff3ef; }
+.cloud-status[data-state='loading']::before { width: 14px; height: 14px; flex: 0 0 14px; border: 2px solid #c7d9cb; border-top-color: #477254; border-radius: 50%; content: ''; animation: cloud-spin 800ms linear infinite; }
+@keyframes cloud-spin { to { transform: rotate(360deg); } }
+.cloud-status-copy { flex: 1; }
+.cloud-retry, .wishes-more { min-height: 34px; padding: 0 12px; border: 1px solid #dce6dc; border-radius: 5px; color: #355c45; background: #fff; cursor: pointer; font-size: 11px; font-weight: 600; }
+.cloud-retry:hover, .wishes-more:hover { background: #eef4ee; }
+.wishes-more { display: block; margin: 16px auto 0; }
+.wishes-more[hidden] { display: none; }
+.wish-admin-bulk { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 7px 0; color: #6f7d73; font-size: 10px; }
+.wish-admin-bulk label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.wish-admin-bulk input, .wish-admin-row > input { width: 15px; height: 15px; accent-color: #477254; }
+.wish-admin-row { grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; }
+.wish-admin-actions { display: flex; gap: 5px; }
+.row-delete-button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 600px) { .cloud-status { align-items: flex-start; font-size: 11px; } .wish-admin-actions { flex-direction: column; } .wish-admin-row { gap: 6px; padding: 9px 7px; } }
+@media (prefers-reduced-motion: reduce) { .cloud-status[data-state='loading']::before { animation: none; } }
+
+.wish-editor { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) minmax(110px, .7fr); gap: 9px; width: 100%; }
+.wish-editor-field { display: grid; gap: 5px; color: #6f7d73; font-size: 10px; }
+.wish-editor-field .text-input { width: 100%; min-height: 34px; padding: 7px; font-size: 11px; }
+.wish-editor-field textarea.text-input { min-height: 62px; resize: vertical; }
+.wish-editor-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 7px; }
+@media (max-width: 600px) { .wish-editor { grid-template-columns: minmax(0, 1fr); } .wish-editor-actions { grid-column: auto; } }
